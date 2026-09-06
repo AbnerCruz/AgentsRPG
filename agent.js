@@ -1,110 +1,106 @@
-// agent.js — um agente de IA na mesa: joga um personagem, tem ficha própria, memória própria,
-// e sua única função é DECIDIR interpretando o personagem e a história (nunca gera ferramentas
-// do site — dados, imagens, mapas são consumidos, não produzidos pelo agente).
+// agent.js — agentes da mesa. O sistema monta a ficha sozinho; o agente só interpreta e decide.
+// A saída do agente é JSON compacto: { fala, mover, acao } — economiza tokens e permite que o
+// site execute movimento/rolagens sem que o agente "invente" ferramentas.
 
 import { put, get, uid } from './db.js';
-import { MemoryStore, renderShortMemoriesForPrompt } from './memory.js';
-import { estimateMessagesTokens } from './tokens.js';
+import { MemoryStore, renderMemories } from './memory.js';
+import { SRD5E, abilityMod, rollSheet } from './srd5e.js';
 
-// Instrução de sistema compartilhada: pede respostas enxutas, sem "pensar em voz alta",
-// preservando qualidade narrativa — inspirado em técnicas de prompting econômico ("caveman"
-// / saída direta), mas sem sacrificar imersão: o agente ainda fala em prosa, só não expande
-// além do necessário nem repete contexto que já está na memória filtrada.
-export const ECONOMY_SYSTEM_SUFFIX = `
-Regras de resposta (importantes, siga sempre):
-- Responda em prosa narrativa curta e direta: 1 a 3 parágrafos curtos, no máximo, salvo se a cena
-  pedir claramente mais (ex: uma cena de virada importante). Nunca corte uma ideia pela metade —
-  termine o pensamento, só não se estenda além do necessário.
-- Não repita informações que já estão no contexto fornecido (memórias, ficha, cena atual).
-- Não narre pensamentos internos extensos nem faça meta-comentários fora do personagem.
-- Vá direto à ação, fala ou decisão do personagem — sem preâmbulo.
-`.trim();
+const ECONOMY = `Responda SOMENTE com JSON válido: {"fala":"...","mover":[x,y]|null,"acao":"..."|null}.
+"fala" = o que seu personagem diz ou faz, em 1-2 frases curtas, em prosa viva, sem meta-comentário.
+"mover" = coordenada de destino se quiser se deslocar (só casas que você enxerga), senão null.
+"acao" = nome curto da ação mecânica (ex: "ataque com espada", "teste de Percepção") ou null.
+Nunca repita o que já foi dito. Reaja ao que os outros acabaram de fazer.`;
 
 export class Agent {
-  constructor(data) {
+  constructor(d) {
     Object.assign(this, {
-      id: data.id || uid('agent'),
-      name: data.name,
-      role: data.role || 'player', // 'player' | 'master' | 'assistant'
-      model: data.model,
-      sheet: data.sheet || {},
-      campaignId: data.campaignId || null,
-      createdAt: data.createdAt || Date.now(),
+      id: d.id || uid('ag'),
+      name: d.name,
+      role: d.role || 'pc', // 'pc' | 'master'
+      model: d.model,
+      sheet: d.sheet || null,
+      color: d.color || pickColor(),
+      createdAt: d.createdAt || Date.now(),
     });
     this.memory = new MemoryStore(this.id);
   }
 
-  static async load(id) {
-    const data = await get('agents', id);
-    if (!data) return null;
-    return new Agent(data);
-  }
+  static async load(id) { const d = await get('agents', id); return d ? new Agent(d) : null; }
 
   async save() {
-    await put('agents', {
-      id: this.id, name: this.name, role: this.role, model: this.model,
-      sheet: this.sheet, campaignId: this.campaignId, createdAt: this.createdAt,
-    });
+    await put('agents', { id: this.id, name: this.name, role: this.role, model: this.model, sheet: this.sheet, color: this.color, createdAt: this.createdAt });
     return this;
   }
 
-  // Registra um novo fato na memória do agente. A própria IA do agente (mesmo modelo) gera
-  // o resumo curto + tags — mas isso acontece UMA VEZ por fato, não repetidamente por turno.
-  async remember(orClient, longText) {
+  // O SISTEMA monta a ficha. A IA só escolhe conceito (nome/raça/classe/traço), o resto é
+  // rolado e calculado localmente pelas regras — de graça, sem gastar tokens com aritmética.
+  async buildSheet(or, { ambientacao = '', grupo = [] } = {}) {
     const prompt = [
-      { role: 'system', content: 'Resuma o fato a seguir em UMA frase curta (memória curta) e liste até 5 tags de UMA palavra cada (personagens, lugares, temas envolvidos). Responda SOMENTE em JSON: {"short":"...","tags":["...","..."]}' },
-      { role: 'user', content: longText },
+      { role: 'system', content: `Crie um personagem jogável para uma mesa de RPG (D&D 5e SRD). Responda SOMENTE JSON: {"nome":"...","raca":"...","classe":"...","traco":"...","objetivo":"..."} — raça e classe devem ser destas listas. Raças: ${SRD5E.races.map(r => r.name).join(', ')}. Classes: ${SRD5E.classes.map(c => c.name).join(', ')}. "traco" = uma frase de personalidade. "objetivo" = o que move este personagem. Evite repetir os companheiros já existentes.` },
+      { role: 'user', content: `Ambientação: ${ambientacao || 'fantasia medieval genérica'}.\nCompanheiros já criados: ${grupo.length ? grupo.join('; ') : 'nenhum'}.` },
     ];
-    const result = await orClient.chat(prompt, { model: this.model, maxTokens: 150, reasoningEffort: 'low' });
-    let parsed;
-    try {
-      parsed = JSON.parse(result.text.trim().replace(/^```json|```$/g, ''));
-    } catch {
-      parsed = { short: longText.slice(0, 140), tags: [] };
-    }
-    await this.memory.addMemory({ longText, shortText: parsed.short, tags: parsed.tags });
-    return { usage: result, parsed };
+    const r = await or.chat(prompt, { model: this.model, maxTokens: 180, json: true });
+    let c;
+    try { c = JSON.parse(clean(r.text)); } catch { c = { nome: this.name, raca: 'Humano', classe: 'Guerreiro', traco: 'reservado', objetivo: 'sobreviver' }; }
+    this.sheet = rollSheet(c); // aritmética, atributos, PV, CA, perícias — tudo local
+    this.name = this.sheet.nome || this.name;
+    await this.save();
+    return { sheet: this.sheet, cost: r.cost, inTokens: r.inTokens, outTokens: r.outTokens };
   }
 
-  // Monta o prompt econômico: ficha resumida + memórias curtas filtradas (JS puro) + cena atual.
-  async buildPrompt({ sceneContext, incomingInput, extraSystem = '' }) {
-    const relevant = await this.memory.filterRelevant(`${sceneContext}\n${incomingInput}`, { maxResults: 8 });
-    const memoryBlock = renderShortMemoriesForPrompt(relevant);
-
-    const system = [
-      this.role === 'master'
-        ? 'Você é o MESTRE de uma mesa de RPG. Cria e conduz a história, cataloga eventos como memórias.'
-        : this.role === 'assistant'
-          ? 'Você é o AGENTE AUXILIAR do jogador-mestre. Sua função é interpretar a narração do jogador e traduzi-la em instruções claras para os agentes envolvidos, sem inventar conteúdo além do que o jogador disse.'
-          : `Você interpreta o personagem "${this.sheet?.nome || this.name}" nesta mesa de RPG. Tome decisões coerentes com a ficha, a personalidade e a história do personagem.`,
-      this.role !== 'assistant' ? `Ficha resumida: ${summarizeSheet(this.sheet)}` : '',
-      `Memórias relevantes deste agente:\n${memoryBlock}`,
-      extraSystem,
-      ECONOMY_SYSTEM_SUFFIX,
+  async act(or, { scene, vision, sceneLog, extra = '', maxTokens = 260 }) {
+    const mems = await this.memory.relevant(`${scene} ${sceneLog}`, 5);
+    const sys = [
+      `Você interpreta ${this.sheet?.nome || this.name}: ${sheetLine(this.sheet)}.`,
+      this.sheet?.traco ? `Personalidade: ${this.sheet.traco}. Objetivo: ${this.sheet.objetivo || '—'}.` : '',
+      `O que você enxerga agora: ${vision}`,
+      `Suas lembranças relevantes:\n${renderMemories(mems)}`,
+      extra,
+      ECONOMY,
     ].filter(Boolean).join('\n\n');
 
-    const messages = [
-      { role: 'system', content: system },
-      { role: 'user', content: `Cena atual: ${sceneContext}\n\nInput recebido: ${incomingInput}` },
-    ];
-    return { messages, relevantMemories: relevant, estimatedTokens: estimateMessagesTokens(messages) };
+    const r = await or.chat([
+      { role: 'system', content: sys },
+      { role: 'user', content: `Cena: ${scene}\n\nO que acabou de acontecer:\n${sceneLog}\n\nSua vez.` },
+    ], { model: this.model, maxTokens, json: true });
+
+    return { ...r, action: parseAction(r.text) };
   }
 
-  async act(orClient, { sceneContext, incomingInput, extraSystem, maxTokens = 500 }) {
-    const { messages, estimatedTokens } = await this.buildPrompt({ sceneContext, incomingInput, extraSystem });
-    const result = await orClient.chat(messages, { model: this.model, maxTokens, reasoningEffort: 'low' });
-    return { ...result, estimatedPromptTokens: estimatedTokens };
+  // Registra memória: uma chamada por evento importante, não por turno.
+  async remember(or, fact) {
+    const r = await or.chat([
+      { role: 'system', content: 'Resuma em UMA frase curta e liste até 4 tags de uma palavra. SOMENTE JSON: {"s":"...","t":["..."]}' },
+      { role: 'user', content: fact.slice(0, 1200) },
+    ], { model: this.model, maxTokens: 90, json: true });
+    let p;
+    try { p = JSON.parse(clean(r.text)); } catch { p = { s: fact.slice(0, 120), t: [] }; }
+    await this.memory.add({ longText: fact, shortText: p.s, tags: p.t });
+    return r;
   }
 }
 
-function summarizeSheet(sheet) {
-  if (!sheet || Object.keys(sheet).length === 0) return '(ficha ainda não preenchida)';
-  const parts = [];
-  if (sheet.nome) parts.push(sheet.nome);
-  if (sheet.raca) parts.push(sheet.raca);
-  if (sheet.classe) parts.push(`${sheet.classe} nv.${sheet.nivel || 1}`);
-  if (sheet.pv_atual != null) parts.push(`PV ${sheet.pv_atual}/${sheet.pv_max ?? '?'}`);
-  if (sheet.ca != null) parts.push(`CA ${sheet.ca}`);
-  if (sheet.tracos?.length) parts.push(`traços: ${sheet.tracos.slice(0, 3).join('; ')}`);
-  return parts.join(' | ');
+function sheetLine(s) {
+  if (!s) return 'ficha ainda não gerada';
+  return `${s.raca} ${s.classe} nv.${s.nivel} — PV ${s.pv_atual}/${s.pv_max}, CA ${s.ca}, For ${s.atributos.Força} Des ${s.atributos.Destreza} Con ${s.atributos.Constituição} Int ${s.atributos.Inteligência} Sab ${s.atributos.Sabedoria} Car ${s.atributos.Carisma}`;
 }
+
+export function parseAction(text) {
+  try {
+    const o = JSON.parse(clean(text));
+    return {
+      fala: String(o.fala || o.text || '').trim(),
+      mover: Array.isArray(o.mover) && o.mover.length === 2 ? { x: +o.mover[0], y: +o.mover[1] } : null,
+      acao: o.acao || null,
+    };
+  } catch {
+    return { fala: String(text || '').trim(), mover: null, acao: null };
+  }
+}
+
+export const clean = (t) => String(t || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+
+const PALETTE = ['#c99a3b', '#4f7566', '#a34a3a', '#5b7fa3', '#8a6bab', '#b07840', '#3f8f7d'];
+let ci = 0;
+function pickColor() { return PALETTE[ci++ % PALETTE.length]; }

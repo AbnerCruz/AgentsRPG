@@ -1,99 +1,79 @@
-// memory.js — memória de cada agente (incluindo o mestre).
+// memory.js — memória por agente + o CORO DA CENA (contexto compartilhado).
 //
-// Arquitetura de economia:
-// 1) Cada memória LONGA (detalhada) tem uma memória CURTA associada (1-2 frases) + tags.
-// 2) Quando o agente precisa de contexto, filtramos as memórias CURTAS por tag/palavra-chave
-//    usando JS PURO (custo zero de IA) — nunca mandamos todas as memórias pra IA analisar.
-// 3) Só as memórias curtas pré-filtradas (top N por relevância) vão pro prompt da IA.
-// 4) Se o agente precisar de detalhe adicional sobre uma memória curta específica, SÓ ENTÃO
-//    a memória longa correspondente é anexada ao prompt (sob demanda, não em bloco).
+// O erro da versão anterior: cada agente falava no vácuo. Agora existe um buffer único de cena
+// que registra tudo que foi dito/feito por todos (jogador, mestre, agentes), e cada agente recebe
+// as últimas falas desse buffer no prompt. É assim que eles reagem uns aos outros.
 //
-// A memória curta + tags é gerada pela própria IA do agente (mesmo modelo), mas isso só
-// acontece UMA VEZ, no momento em que o fato é registrado — não repetidamente por turno.
+// Economia: o buffer é curto (últimas N falas), e a memória longa continua sendo filtrada
+// por tags em JS puro (custo zero) antes de qualquer chamada de IA.
 
 import { put, get, getAll, del, uid } from './db.js';
 
+// ---------- Contexto compartilhado da cena ----------
+export class SceneBuffer {
+  constructor(maxTurns = 12) {
+    this.turns = []; // { speaker, role, text, ts }
+    this.maxTurns = maxTurns;
+  }
+
+  push(speaker, role, text) {
+    this.turns.push({ speaker, role, text, ts: Date.now() });
+    if (this.turns.length > this.maxTurns * 2) this.turns = this.turns.slice(-this.maxTurns);
+  }
+
+  // O que os agentes leem. Exclui a própria fala do agente pra não duplicar tokens.
+  render(excludeSpeaker = null, limit = null) {
+    const t = this.turns.slice(-(limit || this.maxTurns));
+    const lines = t.filter(x => x.speaker !== excludeSpeaker).map(x => `${x.speaker}: ${x.text}`);
+    return lines.length ? lines.join('\n') : '(a cena acaba de começar)';
+  }
+
+  lastText() {
+    return this.turns.length ? this.turns[this.turns.length - 1].text : '';
+  }
+
+  clear() { this.turns = []; }
+}
+
+// ---------- Memória de longo prazo por agente ----------
 export class MemoryStore {
-  constructor(agentId) {
-    this.agentId = agentId;
-  }
+  constructor(agentId) { this.agentId = agentId; }
 
-  async addMemory({ longText, shortText, tags }) {
+  async add({ longText, shortText, tags }) {
     const id = uid('mem');
-    const long = { id, agentId: this.agentId, text: longText, createdAt: Date.now() };
-    const short = { id: `short_${id}`, agentId: this.agentId, longId: id, text: shortText, tags: normalizeTags(tags), createdAt: Date.now() };
-    await put('memories_long', long);
-    await put('memories_short', short);
-    return { long, short };
+    await put('memories_long', { id, agentId: this.agentId, text: longText, createdAt: Date.now() });
+    await put('memories_short', { id: `s_${id}`, agentId: this.agentId, longId: id, text: shortText, tags: norm(tags), createdAt: Date.now() });
   }
 
-  async allShort() {
-    const all = await getAll('memories_short');
-    return all.filter(m => m.agentId === this.agentId).sort((a, b) => b.createdAt - a.createdAt);
+  async shorts() {
+    return (await getAll('memories_short')).filter(m => m.agentId === this.agentId).sort((a, b) => b.createdAt - a.createdAt);
   }
 
-  async getLong(longId) {
-    return get('memories_long', longId);
+  async longOf(shortId) {
+    const s = (await getAll('memories_short')).find(m => m.id === shortId);
+    return s ? get('memories_long', s.longId) : null;
   }
 
-  async deleteMemory(longId) {
-    await del('memories_long', longId);
-    await del('memories_short', `short_${longId}`);
-  }
-
-  // Filtro 100% em JS, custo zero de tokens de IA.
-  // context: string livre (ex: última fala da cena, ação declarada, nome de personagens envolvidos)
-  async filterRelevant(context, { maxResults = 8 } = {}) {
-    const shorts = await this.allShort();
-    if (shorts.length === 0) return [];
-    const contextTokens = tokenize(context);
-    const contextTagsGuess = new Set(contextTokens);
-
-    const scored = shorts.map(mem => {
-      let score = 0;
-      for (const tag of mem.tags) {
-        if (contextTagsGuess.has(tag)) score += 3; // match direto de tag
-      }
-      const memWords = tokenize(mem.text);
-      for (const w of memWords) {
-        if (contextTagsGuess.has(w)) score += 1; // match de palavra no texto curto
-      }
-      // leve viés de recência (memórias recentes um pouco mais relevantes em empate)
-      return { mem, score };
-    });
-
-    scored.sort((a, b) => b.score - a.score || b.mem.createdAt - a.mem.createdAt);
-    const relevant = scored.filter(s => s.score > 0).slice(0, maxResults);
-
-    // Se nada bateu por tag/palavra, ainda assim devolve as N mais recentes
-    // (contexto mínimo é melhor que contexto zero, sem gastar tokens extra pra decidir isso)
-    if (relevant.length === 0) {
-      return shorts.slice(0, Math.min(3, shorts.length)).map(mem => ({ mem, score: 0 }));
-    }
-    return relevant;
+  // Filtro 100% JS — nenhuma chamada de IA para decidir o que é relevante.
+  async relevant(context, max = 6) {
+    const all = await this.shorts();
+    if (!all.length) return [];
+    const ctx = new Set(tok(context));
+    const scored = all.map(m => {
+      let s = 0;
+      for (const t of m.tags) if (ctx.has(t)) s += 3;
+      for (const w of tok(m.text)) if (ctx.has(w)) s += 1;
+      return { m, s };
+    }).sort((a, b) => b.s - a.s || b.m.createdAt - a.m.createdAt);
+    const hits = scored.filter(x => x.s > 0).slice(0, max);
+    return (hits.length ? hits : scored.slice(0, 3)).map(x => x.m);
   }
 }
 
-function normalizeTags(tags) {
-  if (!tags) return [];
-  const arr = Array.isArray(tags) ? tags : String(tags).split(',');
-  return arr.map(t => t.trim().toLowerCase()).filter(Boolean);
+export function renderMemories(list) {
+  return list.length ? list.map(m => `- ${m.text}`).join('\n') : '(nada relevante lembrado)';
 }
 
-const STOPWORDS = new Set(['de', 'da', 'do', 'a', 'o', 'e', 'que', 'em', 'um', 'uma', 'para', 'com', 'no', 'na', 'os', 'as', 'se', 'por', 'foi', 'ao']);
-
-function tokenize(text) {
-  if (!text) return [];
-  return String(text)
-    .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos p/ matching mais tolerante
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 2 && !STOPWORDS.has(w));
-}
-
-// Monta o bloco de "memórias relevantes" pronto pra entrar no prompt, já enxuto.
-export function renderShortMemoriesForPrompt(relevantList) {
-  if (relevantList.length === 0) return '(sem memórias relevantes registradas ainda)';
-  return relevantList.map(({ mem }) => `- [${mem.tags.join(', ')}] ${mem.text}`).join('\n');
-}
+const STOP = new Set(['de', 'da', 'do', 'a', 'o', 'e', 'que', 'em', 'um', 'uma', 'para', 'com', 'no', 'na', 'os', 'as', 'se', 'por', 'foi', 'ao', 'ele', 'ela', 'seu', 'sua']);
+const tok = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 2 && !STOP.has(w));
+const norm = (tags) => (Array.isArray(tags) ? tags : String(tags || '').split(',')).map(t => String(t).trim().toLowerCase()).filter(Boolean).slice(0, 6);

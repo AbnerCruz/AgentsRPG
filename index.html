@@ -2,229 +2,136 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mesa RPG IA</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Mesa</title>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<header class="site-header">
-  <div class="brand">
-    <span class="brand-mark">⚄</span>
-    <div>
-      <h1>Mesa RPG IA</h1>
-      <p class="tagline">Uma mesa, seus agentes, a história que só vocês vão criar.</p>
-    </div>
+<!-- O cenário é o site. Tudo mais flutua por cima. -->
+<canvas id="stage"></canvas>
+
+<!-- Barra superior: só o essencial, sempre visível -->
+<div id="topbar">
+  <span id="scene-name">—</span>
+  <div id="budget-wrap" title="consumo da sessão">
+    <div id="budget-bar"><i></i></div>
+    <span id="budget-text">—</span>
   </div>
-</header>
+  <button id="btn-menu" aria-label="menu">≡</button>
+</div>
 
-<nav class="tabs">
-  <button class="tab-btn active" data-tab="config">Configuração</button>
-  <button class="tab-btn" data-tab="sessao-zero">Sessão Zero</button>
-  <button class="tab-btn" data-tab="mesa">Mesa</button>
-  <button class="tab-btn" data-tab="memoria">Memória</button>
-  <button class="tab-btn" data-tab="artefatos">Artefatos</button>
-  <button class="tab-btn" data-tab="dados">Save / Backup</button>
-</nav>
+<!-- Narração: fita inferior, some quando não há nada -->
+<div id="feed"></div>
 
-<main>
+<!-- Entrada -->
+<div id="composer">
+  <button id="btn-play" title="play/pause" hidden>▶</button>
+  <input id="say" type="text" placeholder="O que você faz?" autocomplete="off">
+  <button id="btn-send">↵</button>
+</div>
 
-  <!-- ===================== CONFIGURAÇÃO ===================== -->
-  <section id="tab-config" class="tab-panel active">
-    <div class="page">
-      <h2>Configuração da mesa</h2>
+<!-- Painel lateral: só abre quando pedido -->
+<aside id="panel" hidden>
+  <header>
+    <nav>
+      <button class="pnav active" data-p="elenco">Elenco</button>
+      <button class="pnav" data-p="acervo">Acervo</button>
+      <button class="pnav" data-p="ajustes">Ajustes</button>
+    </nav>
+    <button id="panel-close">✕</button>
+  </header>
 
-      <fieldset class="ledger-block">
-        <legend>Chaves da OpenRouter</legend>
-        <label>API Key
-          <input type="password" id="cfg-api-key" placeholder="sk-or-...">
-        </label>
-        <label>Management Key
-          <input type="password" id="cfg-mgmt-key" placeholder="usada para consultar saldo com precisão">
-        </label>
-        <p class="hint">As chaves ficam salvas apenas no seu navegador (IndexedDB local). Nada é enviado a nenhum servidor além da própria OpenRouter.</p>
-        <button id="btn-sync-balance">Sincronizar saldo</button>
-        <span>Saldo disponível na OpenRouter: <strong id="cfg-saldo-real">—</strong></span>
-      </fieldset>
+  <div class="pbody" id="p-elenco"></div>
 
-      <fieldset class="ledger-block">
-        <legend>Caixa e sessões</legend>
-        <label>Caixa do site (USD, ≤ saldo real)
-          <input type="number" step="0.01" id="cfg-caixa">
-        </label>
-        <p class="hint">Este caixa é lastreado: não reseta. O que não for gasto numa sessão fica disponível para a próxima.</p>
-        <label>Sessões por semana
-          <select id="cfg-sessoes-semana">
-            <option value="1">1x por semana</option>
-            <option value="2">2x por semana</option>
-          </select>
-        </label>
-      </fieldset>
-
-      <fieldset class="ledger-block">
-        <legend>Modelos de IA</legend>
-        <label>Modelo dos agentes-jogadores (padrão barato)
-          <input type="text" id="cfg-modelo-agentes" value="openai/gpt-oss-20b">
-        </label>
-        <label>Modelo do mestre / auxiliar
-          <input type="text" id="cfg-modelo-mestre" value="openai/gpt-oss-120b">
-        </label>
-        <label>Modelo de geração de imagem
-          <input type="text" id="cfg-modelo-imagem" placeholder="ex: google/gemini-2.5-flash-image">
-        </label>
-        <button id="btn-load-models">Carregar métricas dos modelos selecionados</button>
-        <table class="metrics-table">
-          <thead><tr><th>Modelo</th><th>Contexto</th><th>$/token entrada</th><th>$/token saída</th><th>Modalidade</th></tr></thead>
-          <tbody id="model-metrics-body"></tbody>
-        </table>
-      </fieldset>
-
-      <fieldset class="ledger-block">
-        <legend>Sistema de regras</legend>
-        <label>
-          <select id="cfg-sistema">
-            <option value="dnd5e-srd">D&D 5e (padrão — SRD embutido)</option>
-            <option value="custom">Sistema próprio (só meus PDFs)</option>
-          </select>
-        </label>
-        <p class="hint">Com D&D 5e (padrão), você ainda pode anexar PDFs adjacentes (homebrew, ambientação) na Sessão Zero — eles têm prioridade sobre o SRD em caso de conflito.</p>
-      </fieldset>
-
-      <button id="btn-save-config" class="btn-primary">Salvar configuração</button>
-      <p id="cfg-status" class="status"></p>
+  <div class="pbody" id="p-acervo" hidden>
+    <label class="filedrop">
+      <input type="file" id="pdf-in" accept="application/pdf" multiple hidden>
+      <span>Anexar PDFs de regras, aventura ou ambientação</span>
+    </label>
+    <div id="import-progress" hidden>
+      <div class="pbar"><i></i></div>
+      <small id="import-label"></small>
     </div>
-  </section>
+    <div id="art-list"></div>
+  </div>
 
-  <!-- ===================== SESSÃO ZERO ===================== -->
-  <section id="tab-sessao-zero" class="tab-panel">
-    <div class="page">
-      <h2>Sessão zero</h2>
-      <p class="hint">Anexe os PDFs de regras, homebrew, ambientação. A extração de texto não gasta tokens de IA — só é enviado à IA o trecho realmente necessário, quando necessário.</p>
-      <input type="file" id="s0-pdf-input" accept="application/pdf" multiple>
-      <button id="btn-process-pdfs">Processar PDFs</button>
-      <button id="btn-generate-template">Gerar / localizar template de ficha</button>
-      <p id="s0-status" class="status"></p>
-      <div id="s0-template-preview"></div>
+  <div class="pbody" id="p-ajustes" hidden>
+    <div class="field"><label>Saldo no provedor</label><output id="saldo-live">—</output></div>
+    <div class="field"><label>Caixa da mesa (USD)</label><input type="number" step="0.01" id="f-caixa"></div>
+    <div class="field"><label>Sessões por semana</label>
+      <select id="f-sessoes"><option value="1">1</option><option value="2">2</option></select>
     </div>
-  </section>
+    <div class="field"><label>Modelo dos agentes</label><select id="f-m-agentes"></select></div>
+    <div class="field"><label>Modelo do mestre</label><select id="f-m-mestre"></select></div>
+    <div class="field"><label>Modelo de imagem</label><select id="f-m-imagem"></select></div>
+    <button id="f-save" class="primary">Salvar</button>
+    <hr>
+    <button id="btn-export">Exportar save</button>
+    <button id="btn-import">Importar save</button>
+    <input type="file" id="import-in" accept=".zip" hidden>
+    <button id="btn-end" class="danger">Encerrar sessão</button>
+  </div>
+</aside>
 
-  <!-- ===================== MESA ===================== -->
-  <section id="tab-mesa" class="tab-panel">
-    <div class="page two-col">
-      <div class="col-main">
-        <h2>Mesa</h2>
+<!-- Ficha do token tocado -->
+<div id="sheet-pop" hidden></div>
 
-        <div class="ledger-block">
-          <button id="btn-start-session" class="btn-primary">Iniciar sessão</button>
-          <button id="btn-finish-session">Encerrar sessão</button>
-          <div id="session-metrics" class="metrics-line">Nenhuma sessão ativa.</div>
-        </div>
+<!-- Setup inicial: uma coisa por vez, sem formulário gigante -->
+<div id="setup">
+  <div class="setup-card">
+    <h1>Mesa</h1>
 
-        <label>Contexto da cena atual
-          <input type="text" id="scene-context" placeholder="ex: taverna do Cervo Dourado, à noite">
-        </label>
+    <section class="step active" data-step="0">
+      <p>Cole suas chaves da OpenRouter. Ficam só neste navegador.</p>
+      <input type="password" id="s-api" placeholder="API key (sk-or-...)">
+      <input type="password" id="s-mgmt" placeholder="Management key">
+      <p class="err" id="s-err0"></p>
+      <button class="primary" id="s-next0">Conectar</button>
+    </section>
 
-        <div id="scene-log" class="scene-log"></div>
+    <section class="step" data-step="1">
+      <p>Saldo disponível: <strong id="s-saldo">—</strong></p>
+      <label>Quanto desse saldo esta mesa pode gastar?</label>
+      <input type="number" step="0.01" id="s-caixa" placeholder="0.00">
+      <label>Sessões por semana</label>
+      <select id="s-sessoes"><option value="1">1 por semana</option><option value="2">2 por semana</option></select>
+      <button class="primary" id="s-next1">Continuar</button>
+    </section>
 
-        <div class="input-row">
-          <input type="text" id="scene-input" placeholder="Narre sua ação ou fala...">
-          <button id="btn-send-input" class="btn-primary">Enviar</button>
-        </div>
-        <p id="table-status" class="status"></p>
+    <section class="step" data-step="2">
+      <label>Modelo dos agentes</label>
+      <select id="s-m-agentes"></select>
+      <label>Modelo do mestre</label>
+      <select id="s-m-mestre"></select>
+      <label>Modelo de imagem</label>
+      <select id="s-m-imagem"></select>
+      <button class="primary" id="s-next2">Continuar</button>
+    </section>
+
+    <section class="step" data-step="3">
+      <label>Como você quer jogar?</label>
+      <div class="choices">
+        <button class="choice" data-modo="mestre-ia">A IA mestra, eu jogo um personagem</button>
+        <button class="choice" data-modo="mestre-eu">Eu sou o mestre, as IAs jogam</button>
+        <button class="choice" data-modo="so-ia">Só as IAs jogam, eu assisto</button>
       </div>
+      <label>Quantos personagens de IA?</label>
+      <select id="s-qtd"><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
+      <label>Anexar material agora? (opcional)</label>
+      <input type="file" id="s-pdf" accept="application/pdf" multiple>
+      <div id="s-progress" hidden><div class="pbar"><i></i></div><small id="s-plabel"></small></div>
+      <button class="primary" id="s-start">Começar</button>
+    </section>
 
-      <aside class="col-side">
-        <div class="ledger-block">
-          <h3>Agentes</h3>
-          <input type="text" id="new-agent-name" placeholder="Nome do agente">
-          <select id="new-agent-role">
-            <option value="player">Jogador (personagem)</option>
-            <option value="master">Mestre</option>
-            <option value="assistant">Auxiliar do mestre-jogador</option>
-          </select>
-          <button id="btn-new-agent">Criar agente</button>
-          <div id="agents-list"></div>
-        </div>
-
-        <div class="ledger-block">
-          <h3>Dados</h3>
-          <input type="text" id="dice-notation" placeholder="ex: 1d20+3" value="1d20">
-          <button id="btn-roll-dice">Rolar</button>
-        </div>
-
-        <div class="ledger-block">
-          <h3>Mapa em grid</h3>
-          <button id="btn-init-map">Iniciar mapa</button>
-          <div class="input-row">
-            <input type="text" id="token-name" placeholder="Nome do token">
-            <button id="btn-add-token">Adicionar token</button>
-          </div>
-          <canvas id="grid-canvas" class="grid-canvas"></canvas>
-        </div>
-
-        <div class="ledger-block">
-          <h3>Geração de imagem</h3>
-          <input type="text" id="img-prompt" placeholder="descreva a imagem do personagem/cena">
-          <button id="btn-generate-image">Gerar imagem</button>
-        </div>
-      </aside>
-    </div>
-  </section>
-
-  <!-- ===================== MEMÓRIA ===================== -->
-  <section id="tab-memoria" class="tab-panel">
-    <div class="page">
-      <h2>Memória dos agentes</h2>
-      <button id="btn-load-memories">Carregar lista de agentes</button>
-      <select id="mem-agent-select"></select>
-      <button id="btn-show-memories">Mostrar memórias</button>
-      <div id="memories-output" class="memories-output"></div>
-    </div>
-  </section>
-
-  <!-- ===================== ARTEFATOS ===================== -->
-  <section id="tab-artefatos" class="tab-panel">
-    <div class="page">
-      <h2>Acervo de artefatos</h2>
-      <div class="ledger-block">
-        <input type="hidden" id="art-id">
-        <label>Título <input type="text" id="art-title"></label>
-        <label>Tipo
-          <select id="art-type">
-            <option value="npc">NPC</option>
-            <option value="local">Local</option>
-            <option value="item">Item</option>
-            <option value="log">Log de campanha</option>
-            <option value="outro">Outro</option>
-          </select>
-        </label>
-        <label>Conteúdo <textarea id="art-content" rows="6"></textarea></label>
-        <button id="btn-save-artifact" class="btn-primary">Salvar artefato</button>
-      </div>
-      <div id="artifacts-list" class="artifacts-list"></div>
-    </div>
-  </section>
-
-  <!-- ===================== SAVE / BACKUP ===================== -->
-  <section id="tab-dados" class="tab-panel">
-    <div class="page">
-      <h2>Save / Backup</h2>
-      <p class="hint">Sem banco de dados: tudo fica no seu navegador. Exporte regularmente para não perder a campanha.</p>
-      <button id="btn-export" class="btn-primary">Exportar tudo (.zip)</button>
-      <button id="btn-import">Importar save (.zip)</button>
-      <input type="file" id="import-file-input" accept=".zip" hidden>
-    </div>
-  </section>
-
-</main>
+    <div id="boot-log"></div>
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
-<script>
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
-</script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';</script>
 <script type="module" src="main.js"></script>
 </body>
 </html>

@@ -1,16 +1,8 @@
-// srd5e.js — subconjunto do D&D 5e SRD (System Reference Document 5.1, licença Creative Commons /
-// Open Game License — conteúdo redistribuível). NÃO é o livro completo oficial da Wizards of the
-// Coast; é a base aberta usada como sistema "D&D 5e (padrão)" deste site.
-// Serve de: (1) template de ficha padrão, (2) regras de fallback (dado, iniciativa, movimento)
-// quando o jogador não anexa PDFs próprios ou anexa apenas material adjacente (homebrew).
+// srd5e.js — D&D 5e SRD (System Reference Document, licença aberta) como sistema padrão.
+// Também contém a montagem AUTOMÁTICA da ficha: a IA escolhe só o conceito, o sistema rola
+// atributos, calcula PV/CA/perícias e monta inventário — tudo local, custo zero de tokens.
 
 export const SRD5E = {
-  meta: {
-    name: 'D&D 5e (SRD)',
-    dice: 'd20',
-    version: 'SRD 5.1 (resumo embutido)',
-  },
-
   abilities: ['Força', 'Destreza', 'Constituição', 'Inteligência', 'Sabedoria', 'Carisma'],
 
   skills: {
@@ -23,66 +15,87 @@ export const SRD5E = {
   },
 
   races: [
-    { name: 'Humano', speed: 9, traits: ['+1 em todos os atributos (variante: 1 talento + 2 perícias)'] },
-    { name: 'Elfo', speed: 9, traits: ['Visão no escuro', 'Sentidos aguçados (perícia em Percepção)', 'Imune a sono mágico'] },
-    { name: 'Anão', speed: 7.5, traits: ['Visão no escuro', 'Resiliência anã (vantagem vs. veneno)', 'Proficiência em uma ferramenta de artesão'] },
-    { name: 'Halfling', speed: 7.5, traits: ['Sortudo (rerolar 1 em d20)', 'Corajoso (vantagem vs. medo)', 'Furtivo por natureza'] },
-    { name: 'Meio-Orc', speed: 9, traits: ['Visão no escuro', 'Resistência implacável (1x/descanso, sobrevive a 0 HP com 1)', 'Ataques críticos causam dano extra'] },
-    { name: 'Draconato', speed: 9, traits: ['Ancestralidade dracônica (arma de sopro, resistência a dano)'] },
-    { name: 'Gnomo', speed: 7.5, traits: ['Visão no escuro', 'Esperteza gnômica (vantagem em testes de Int/Sab/Car vs. magia)'] },
-    { name: 'Meio-Elfo', speed: 9, traits: ['Visão no escuro', '+2 Carisma e +1 em duas outras habilidades', 'Proficiência em duas perícias'] },
-    { name: 'Tiefling', speed: 9, traits: ['Visão no escuro', 'Resistência a dano de fogo', 'Truque de magia infernal'] },
+    { name: 'Humano', speed: 9, bonus: { Força: 1, Destreza: 1, Constituição: 1, Inteligência: 1, Sabedoria: 1, Carisma: 1 }, vision: 8 },
+    { name: 'Elfo', speed: 9, bonus: { Destreza: 2 }, vision: 12 },
+    { name: 'Anão', speed: 7.5, bonus: { Constituição: 2 }, vision: 12 },
+    { name: 'Halfling', speed: 7.5, bonus: { Destreza: 2 }, vision: 8 },
+    { name: 'Meio-Orc', speed: 9, bonus: { Força: 2, Constituição: 1 }, vision: 12 },
+    { name: 'Draconato', speed: 9, bonus: { Força: 2, Carisma: 1 }, vision: 8 },
+    { name: 'Gnomo', speed: 7.5, bonus: { Inteligência: 2 }, vision: 12 },
+    { name: 'Meio-Elfo', speed: 9, bonus: { Carisma: 2, Destreza: 1 }, vision: 12 },
+    { name: 'Tiefling', speed: 9, bonus: { Carisma: 2, Inteligência: 1 }, vision: 12 },
   ],
 
   classes: [
-    { name: 'Bárbaro', hitDie: 'd12', primaryAbility: 'Força', saves: ['Força', 'Constituição'] },
-    { name: 'Bardo', hitDie: 'd8', primaryAbility: 'Carisma', saves: ['Destreza', 'Carisma'] },
-    { name: 'Clérigo', hitDie: 'd8', primaryAbility: 'Sabedoria', saves: ['Sabedoria', 'Carisma'] },
-    { name: 'Druida', hitDie: 'd8', primaryAbility: 'Sabedoria', saves: ['Inteligência', 'Sabedoria'] },
-    { name: 'Guerreiro', hitDie: 'd10', primaryAbility: 'Força ou Destreza', saves: ['Força', 'Constituição'] },
-    { name: 'Monge', hitDie: 'd8', primaryAbility: 'Destreza e Sabedoria', saves: ['Força', 'Destreza'] },
-    { name: 'Paladino', hitDie: 'd10', primaryAbility: 'Força e Carisma', saves: ['Sabedoria', 'Carisma'] },
-    { name: 'Patrulheiro', hitDie: 'd10', primaryAbility: 'Destreza e Sabedoria', saves: ['Força', 'Destreza'] },
-    { name: 'Ladino', hitDie: 'd8', primaryAbility: 'Destreza', saves: ['Destreza', 'Inteligência'] },
-    { name: 'Feiticeiro', hitDie: 'd6', primaryAbility: 'Carisma', saves: ['Constituição', 'Carisma'] },
-    { name: 'Bruxo', hitDie: 'd8', primaryAbility: 'Carisma', saves: ['Sabedoria', 'Carisma'] },
-    { name: 'Mago', hitDie: 'd6', primaryAbility: 'Inteligência', saves: ['Inteligência', 'Sabedoria'] },
+    { name: 'Bárbaro', hitDie: 12, prime: 'Força', armor: 12, skills: ['Atletismo', 'Sobrevivência'], gear: ['machado grande', 'poção de cura'] },
+    { name: 'Bardo', hitDie: 8, prime: 'Carisma', armor: 13, skills: ['Atuação', 'Persuasão'], gear: ['alaúde', 'rapieira'] },
+    { name: 'Clérigo', hitDie: 8, prime: 'Sabedoria', armor: 16, skills: ['Religião', 'Medicina'], gear: ['maça', 'símbolo sagrado'] },
+    { name: 'Druida', hitDie: 8, prime: 'Sabedoria', armor: 13, skills: ['Natureza', 'Percepção'], gear: ['bordão', 'foice'] },
+    { name: 'Guerreiro', hitDie: 10, prime: 'Força', armor: 17, skills: ['Atletismo', 'Intimidação'], gear: ['espada longa', 'escudo'] },
+    { name: 'Monge', hitDie: 8, prime: 'Destreza', armor: 14, skills: ['Acrobacia', 'Furtividade'], gear: ['bastão', 'dardos'] },
+    { name: 'Paladino', hitDie: 10, prime: 'Força', armor: 17, skills: ['Persuasão', 'Religião'], gear: ['espada longa', 'escudo'] },
+    { name: 'Patrulheiro', hitDie: 10, prime: 'Destreza', armor: 14, skills: ['Sobrevivência', 'Percepção'], gear: ['arco longo', 'espada curta'] },
+    { name: 'Ladino', hitDie: 8, prime: 'Destreza', armor: 14, skills: ['Furtividade', 'Prestidigitação'], gear: ['adaga', 'ferramentas de ladrão'] },
+    { name: 'Feiticeiro', hitDie: 6, prime: 'Carisma', armor: 12, skills: ['Arcanismo', 'Enganação'], gear: ['adaga', 'foco arcano'] },
+    { name: 'Bruxo', hitDie: 8, prime: 'Carisma', armor: 13, skills: ['Arcanismo', 'Intimidação'], gear: ['adaga', 'grimório do patrono'] },
+    { name: 'Mago', hitDie: 6, prime: 'Inteligência', armor: 12, skills: ['Arcanismo', 'Investigação'], gear: ['cajado', 'grimório'] },
   ],
 
-  // Ficha padrão gerada quando o sistema é "D&D 5e (padrão)" e nenhum template customizado foi anexado
-  characterSheetTemplate: {
-    fields: [
-      { key: 'nome', label: 'Nome do personagem', type: 'text' },
-      { key: 'raca', label: 'Raça', type: 'select', options: 'races' },
-      { key: 'classe', label: 'Classe', type: 'select', options: 'classes' },
-      { key: 'nivel', label: 'Nível', type: 'number', default: 1 },
-      { key: 'antecedente', label: 'Antecedente', type: 'text' },
-      { key: 'alinhamento', label: 'Alinhamento', type: 'text' },
-      { key: 'atributos', label: 'Atributos (For/Des/Con/Int/Sab/Car)', type: 'abilities' },
-      { key: 'pv_max', label: 'Pontos de Vida (máx.)', type: 'number' },
-      { key: 'pv_atual', label: 'Pontos de Vida (atual)', type: 'number' },
-      { key: 'ca', label: 'Classe de Armadura', type: 'number' },
-      { key: 'deslocamento', label: 'Deslocamento (m)', type: 'number', default: 9 },
-      { key: 'pericias', label: 'Perícias treinadas', type: 'multiselect', options: 'skills' },
-      { key: 'inventario', label: 'Inventário', type: 'list' },
-      { key: 'magias', label: 'Magias conhecidas/preparadas', type: 'list' },
-      { key: 'tracos', label: 'Traços de raça/classe', type: 'list' },
-      { key: 'historia', label: 'História pessoal', type: 'textarea' },
-    ],
-  },
-
-  // Regras de fallback usadas pelo motor quando não há regra extraída de PDF pra algo específico
-  fallbackRules: {
-    initiative: 'd20 + modificador de Destreza; ordem decrescente; reempates por Destreza mais alta.',
-    attackRoll: 'd20 + modificador de habilidade + bônus de proficiência (se treinado) vs. Classe de Armadura do alvo.',
-    savingThrow: 'd20 + modificador de habilidade (+ proficiência se aplicável) vs. Classe de Dificuldade (CD).',
-    movementPerTurn: 'até o deslocamento do personagem (padrão 9m) por turno de combate; movimento em terreno difícil custa o dobro.',
-    restShort: 'Descanso curto (1h): gasta Dados de Vida para recuperar PV.',
-    restLong: 'Descanso longo (8h): recupera todos os PV e metade dos Dados de Vida; recursos de "por dia" resetam.',
-    advantageDisadvantage: 'Vantagem: rola 2d20 e usa o maior. Desvantagem: rola 2d20 e usa o menor. Não acumulam.',
+  fallback: {
+    iniciativa: 'd20 + mod. Destreza, ordem decrescente.',
+    ataque: 'd20 + mod. de habilidade + proficiência vs. CA do alvo.',
+    resistencia: 'd20 + mod. de habilidade vs. CD.',
+    movimento: 'até o deslocamento por turno (padrão 9m = 6 casas de 1,5m).',
   },
 };
 
-export function abilityModifier(score) {
-  return Math.floor((Number(score || 10) - 10) / 2);
+export const abilityMod = (v) => Math.floor((Number(v || 10) - 10) / 2);
+
+function roll4d6DropLowest() {
+  const r = [0, 0, 0, 0].map(() => 1 + Math.floor(Math.random() * 6)).sort((a, b) => b - a);
+  return r[0] + r[1] + r[2];
+}
+
+// Monta a ficha inteira a partir do conceito escolhido pela IA. Aritmética local.
+export function rollSheet(concept) {
+  const race = SRD5E.races.find(r => r.name === concept.raca) || SRD5E.races[0];
+  const cls = SRD5E.classes.find(c => c.name === concept.classe) || SRD5E.classes[4];
+
+  const attrs = {};
+  const order = [cls.prime, ...SRD5E.abilities.filter(a => a !== cls.prime)];
+  const rolls = SRD5E.abilities.map(() => roll4d6DropLowest()).sort((a, b) => b - a);
+  order.forEach((ab, i) => { attrs[ab] = rolls[i]; });
+  for (const [ab, b] of Object.entries(race.bonus || {})) attrs[ab] = (attrs[ab] || 10) + b;
+
+  const conMod = abilityMod(attrs['Constituição']);
+  const dexMod = abilityMod(attrs['Destreza']);
+  const pvMax = cls.hitDie + conMod;
+  const ca = cls.armor >= 16 ? cls.armor : cls.armor + Math.max(0, Math.min(dexMod, 2));
+
+  return {
+    nome: concept.nome || 'Sem nome',
+    raca: race.name,
+    classe: cls.name,
+    nivel: 1,
+    traco: concept.traco || '',
+    objetivo: concept.objetivo || '',
+    atributos: attrs,
+    pv_max: pvMax,
+    pv_atual: pvMax,
+    ca,
+    proficiencia: 2,
+    deslocamento: race.speed,
+    visao: race.vision,
+    pericias: cls.skills,
+    inventario: [...cls.gear, 'mochila', 'rações (3 dias)', 'tocha'],
+    iniciativaMod: dexMod,
+  };
+}
+
+export function rollDice(notation) {
+  const m = String(notation).trim().match(/^(\d*)d(\d+)([+-]\d+)?$/i);
+  if (!m) throw new Error(`Notação inválida: ${notation}`);
+  const n = m[1] ? +m[1] : 1, s = +m[2], mod = m[3] ? +m[3] : 0;
+  const rolls = Array.from({ length: n }, () => 1 + Math.floor(Math.random() * s));
+  return { rolls, mod, total: rolls.reduce((a, b) => a + b, 0) + mod, notation };
 }

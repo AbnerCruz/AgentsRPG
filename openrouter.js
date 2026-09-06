@@ -1,118 +1,113 @@
-// openrouter.js — toda comunicação com a API OpenRouter.
-// Nunca guarda as chaves em disco fora do IndexedDB local do próprio navegador do usuário.
+// openrouter.js — cliente da API. Saldo sincroniza sozinho (sem botão).
 
-const API_BASE = 'https://openrouter.ai/api/v1';
+const API = 'https://openrouter.ai/api/v1';
 
-export class OpenRouterClient {
-  constructor({ apiKey, managementKey } = {}) {
-    this.apiKey = apiKey || '';
-    this.managementKey = managementKey || '';
+export class OpenRouter {
+  constructor({ apiKey = '', managementKey = '' } = {}) {
+    this.apiKey = apiKey;
+    this.managementKey = managementKey;
+    this._models = null;
+    this._balance = null;
+    this._balanceAt = 0;
+    this.onBalance = null; // callback(saldo)
   }
 
   setKeys({ apiKey, managementKey }) {
     if (apiKey !== undefined) this.apiKey = apiKey;
     if (managementKey !== undefined) this.managementKey = managementKey;
+    this._balance = null; this._balanceAt = 0; this._models = null;
   }
 
-  _headers(useManagement = false) {
-    const key = useManagement ? (this.managementKey || this.apiKey) : this.apiKey;
+  _h(mgmt = false) {
     return {
-      'Authorization': `Bearer ${key}`,
+      Authorization: `Bearer ${mgmt && this.managementKey ? this.managementKey : this.apiKey}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': location.href,
+      'HTTP-Referer': location.origin,
       'X-Title': 'Mesa RPG IA',
     };
   }
 
-  // Saldo real da conta OpenRouter (usa management key se disponível, senão api key)
-  async getCredits() {
-    const res = await fetch(`${API_BASE}/credits`, { headers: this._headers(true) });
-    if (!res.ok) throw new Error(`Falha ao consultar saldo (${res.status}). Verifique as chaves.`);
-    const data = await res.json();
-    // formato: { data: { total_credits, total_usage } }
-    const d = data.data || {};
-    const totalCredits = Number(d.total_credits ?? 0);
-    const totalUsage = Number(d.total_usage ?? 0);
-    return { totalCredits, totalUsage, available: totalCredits - totalUsage };
+  // Saldo com cache curto; chamado automaticamente no boot, a cada 2 min e após cada sessão.
+  async balance({ force = false } = {}) {
+    if (!force && this._balance && Date.now() - this._balanceAt < 120000) return this._balance;
+    const r = await fetch(`${API}/credits`, { headers: this._h(true) });
+    if (!r.ok) throw new Error(`Saldo indisponível (${r.status}). Confira as chaves.`);
+    const d = (await r.json()).data || {};
+    const total = Number(d.total_credits ?? 0), used = Number(d.total_usage ?? 0);
+    this._balance = { total, used, available: total - used };
+    this._balanceAt = Date.now();
+    if (this.onBalance) this.onBalance(this._balance);
+    return this._balance;
   }
 
-  async listModels() {
-    const res = await fetch(`${API_BASE}/models`, { headers: this._headers(false) });
-    if (!res.ok) throw new Error(`Falha ao listar modelos (${res.status}).`);
-    const data = await res.json();
-    return (data.data || []).map(m => ({
+  startAutoSync(intervalMs = 120000) {
+    this.balance({ force: true }).catch(() => {});
+    if (this._timer) clearInterval(this._timer);
+    this._timer = setInterval(() => this.balance({ force: true }).catch(() => {}), intervalMs);
+  }
+
+  async models() {
+    if (this._models) return this._models;
+    const r = await fetch(`${API}/models`, { headers: this._h() });
+    if (!r.ok) throw new Error(`Modelos indisponíveis (${r.status}).`);
+    this._models = ((await r.json()).data || []).map(m => ({
       id: m.id,
       name: m.name || m.id,
-      contextLength: m.context_length,
-      pricing: m.pricing, // { prompt, completion, image, ... } por token, string USD
+      ctx: m.context_length,
+      pricing: m.pricing || {},
       modality: m.architecture?.modality || 'text->text',
+      inPrice: Number(m.pricing?.prompt || 0),
+      outPrice: Number(m.pricing?.completion || 0),
     }));
+    return this._models;
   }
 
-  // Chamada de chat padrão. messages: [{role, content}]
-  // opts: { model, maxTokens, temperature, reasoningEffort }
-  async chat(messages, opts = {}) {
-    const body = {
-      model: opts.model,
-      messages,
-      max_tokens: opts.maxTokens ?? 700,
-      temperature: opts.temperature ?? 0.8,
-    };
-    // Suporte a "esforço de raciocínio" reduzido quando o modelo aceita (economia de tokens de pensamento)
-    if (opts.reasoningEffort) {
-      body.reasoning = { effort: opts.reasoningEffort }; // "low" | "medium" | "high"
-    }
-    const t0 = performance.now();
-    const res = await fetch(`${API_BASE}/chat/completions`, {
-      method: 'POST',
-      headers: this._headers(false),
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`Erro na chamada de IA (${res.status}): ${errText}`);
-    }
-    const data = await res.json();
-    const usage = data.usage || {};
+  async textModels() {
+    return (await this.models())
+      .filter(m => !m.modality.includes('->image'))
+      .sort((a, b) => (a.inPrice + a.outPrice) - (b.inPrice + b.outPrice));
+  }
+
+  async imageModels() {
+    return (await this.models())
+      .filter(m => m.modality.includes('->image'))
+      .sort((a, b) => (a.inPrice + a.outPrice) - (b.inPrice + b.outPrice));
+  }
+
+  priceOf(modelId) {
+    return (this._models || []).find(m => m.id === modelId) || null;
+  }
+
+  async chat(messages, { model, maxTokens = 500, temperature = 0.85, json = false } = {}) {
+    const body = { model, messages, max_tokens: maxTokens, temperature, reasoning: { effort: 'low' } };
+    if (json) body.response_format = { type: 'json_object' };
+    const r = await fetch(`${API}/chat/completions`, { method: 'POST', headers: this._h(), body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(`IA falhou (${r.status}): ${(await r.text().catch(() => '')).slice(0, 200)}`);
+    const d = await r.json();
+    const u = d.usage || {};
+    const m = this.priceOf(model);
+    const cost = m ? (m.inPrice * (u.prompt_tokens || 0) + m.outPrice * (u.completion_tokens || 0)) : 0;
     return {
-      text: data.choices?.[0]?.message?.content ?? '',
-      promptTokens: usage.prompt_tokens ?? 0,
-      completionTokens: usage.completion_tokens ?? 0,
-      totalTokens: usage.total_tokens ?? 0,
-      model: data.model || opts.model,
-      latencyMs: Math.round(performance.now() - t0),
-      raw: data,
+      text: d.choices?.[0]?.message?.content ?? '',
+      inTokens: u.prompt_tokens || 0,
+      outTokens: u.completion_tokens || 0,
+      cost,
+      model,
     };
   }
 
-  // Geração de imagem via modelo de imagem da OpenRouter (ex: modelos com modality image)
-  async generateImage(prompt, opts = {}) {
-    const body = {
-      model: opts.model,
-      messages: [{ role: 'user', content: prompt }],
-      modalities: ['image', 'text'],
-    };
-    const res = await fetch(`${API_BASE}/chat/completions`, {
-      method: 'POST',
-      headers: this._headers(false),
-      body: JSON.stringify(body),
+  async image(prompt, { model } = {}) {
+    const r = await fetch(`${API}/chat/completions`, {
+      method: 'POST', headers: this._h(),
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], modalities: ['image', 'text'] }),
     });
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`Erro na geração de imagem (${res.status}): ${errText}`);
-    }
-    const data = await res.json();
-    const msg = data.choices?.[0]?.message || {};
-    // imagens retornam em msg.images[] como data URL (formato OpenRouter multimodal)
-    const images = (msg.images || []).map(img => img.image_url?.url).filter(Boolean);
-    return { images, usage: data.usage || {}, raw: data };
-  }
-
-  // Estima custo de uma chamada dado o pricing do modelo (USD por token) e tokens usados
-  static estimateCostUSD(pricing, promptTokens, completionTokens) {
-    if (!pricing) return 0;
-    const p = Number(pricing.prompt || 0) * promptTokens;
-    const c = Number(pricing.completion || 0) * completionTokens;
-    return p + c;
+    if (!r.ok) throw new Error(`Imagem falhou (${r.status}).`);
+    const d = await r.json();
+    const msg = d.choices?.[0]?.message || {};
+    const imgs = (msg.images || []).map(i => i.image_url?.url).filter(Boolean);
+    const u = d.usage || {};
+    const m = this.priceOf(model);
+    const cost = m ? (m.inPrice * (u.prompt_tokens || 0) + m.outPrice * (u.completion_tokens || 0)) : 0;
+    return { url: imgs[0] || null, cost };
   }
 }

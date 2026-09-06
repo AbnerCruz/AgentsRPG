@@ -1,9 +1,8 @@
-// db.js — persistência local via IndexedDB, sem backend, sem servidor.
-// Stores: config, agents, memories_long, memories_short, artifacts, logs, sessions, maps
+// db.js — persistência local. Sem backend, sem servidor.
 
 const DB_NAME = 'mesa_rpg_ia';
-const DB_VERSION = 1;
-const STORES = ['config', 'agents', 'memories_long', 'memories_short', 'artifacts', 'logs', 'sessions', 'maps', 'rules_cache'];
+const DB_VERSION = 2;
+export const STORES = ['config', 'agents', 'memories_long', 'memories_short', 'artifacts', 'sessions', 'world'];
 
 let _db = null;
 
@@ -13,11 +12,7 @@ export function openDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
-      for (const store of STORES) {
-        if (!db.objectStoreNames.contains(store)) {
-          db.createObjectStore(store, { keyPath: 'id' });
-        }
-      }
+      for (const s of STORES) if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id' });
     };
     req.onsuccess = (e) => { _db = e.target.result; resolve(_db); };
     req.onerror = (e) => reject(e.target.error);
@@ -26,86 +21,71 @@ export function openDB() {
 
 export async function put(store, obj) {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  return new Promise((res, rej) => {
     const tx = db.transaction(store, 'readwrite');
     tx.objectStore(store).put(obj);
-    tx.oncomplete = () => resolve(obj);
-    tx.onerror = (e) => reject(e.target.error);
+    tx.oncomplete = () => res(obj);
+    tx.onerror = (e) => rej(e.target.error);
   });
 }
 
 export async function get(store, id) {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  return new Promise((res, rej) => {
     const tx = db.transaction(store, 'readonly');
-    const req = tx.objectStore(store).get(id);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = (e) => reject(e.target.error);
+    const r = tx.objectStore(store).get(id);
+    r.onsuccess = () => res(r.result || null);
+    r.onerror = (e) => rej(e.target.error);
   });
 }
 
 export async function getAll(store) {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  return new Promise((res, rej) => {
     const tx = db.transaction(store, 'readonly');
-    const req = tx.objectStore(store).getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = (e) => reject(e.target.error);
+    const r = tx.objectStore(store).getAll();
+    r.onsuccess = () => res(r.result || []);
+    r.onerror = (e) => rej(e.target.error);
   });
 }
 
 export async function del(store, id) {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  return new Promise((res, rej) => {
     const tx = db.transaction(store, 'readwrite');
     tx.objectStore(store).delete(id);
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = (e) => reject(e.target.error);
+    tx.oncomplete = () => res(true);
+    tx.onerror = (e) => rej(e.target.error);
   });
 }
 
 export async function clearAll() {
   const db = await openDB();
-  for (const store of STORES) {
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(store, 'readwrite');
-      tx.objectStore(store).clear();
-      tx.oncomplete = resolve;
-      tx.onerror = (e) => reject(e.target.error);
+  for (const s of STORES) {
+    await new Promise((res, rej) => {
+      const tx = db.transaction(s, 'readwrite');
+      tx.objectStore(s).clear();
+      tx.oncomplete = res;
+      tx.onerror = (e) => rej(e.target.error);
     });
   }
 }
 
-// ---- Export / Import (zip) ----
-// Usa JSZip (carregado via CDN no index.html)
-
-export async function exportAllToZip() {
+export async function exportZip() {
   const dump = {};
-  for (const store of STORES) {
-    dump[store] = await getAll(store);
-  }
+  for (const s of STORES) dump[s] = await getAll(s);
   const zip = new JSZip();
-  zip.file('mesa-rpg-ia-save.json', JSON.stringify(dump, null, 2));
-  // artefatos binários (imagens geradas em base64) já vêm embutidos no JSON como dataURL,
-  // então um único arquivo json dentro do zip é suficiente e mais simples de restaurar.
-  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-  return blob;
+  zip.file('save.json', JSON.stringify(dump));
+  return zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
 }
 
-export async function importFromZipFile(file) {
+export async function importZip(file) {
   const zip = await JSZip.loadAsync(file);
-  const entry = zip.file('mesa-rpg-ia-save.json');
-  if (!entry) throw new Error('Arquivo de save não encontrado dentro do zip (esperado: mesa-rpg-ia-save.json).');
-  const text = await entry.async('string');
-  const dump = JSON.parse(text);
+  const entry = zip.file('save.json') || zip.file('mesa-rpg-ia-save.json');
+  if (!entry) throw new Error('Save não encontrado no zip.');
+  const dump = JSON.parse(await entry.async('string'));
   await clearAll();
-  for (const store of STORES) {
-    const rows = dump[store] || [];
-    for (const row of rows) await put(store, row);
-  }
-  return true;
+  for (const s of STORES) for (const row of (dump[s] || [])) await put(s, row);
 }
 
-export function uid(prefix = 'id') {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
+export const uid = (p = 'id') => `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
