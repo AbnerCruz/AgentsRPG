@@ -46,9 +46,14 @@
   <div class="pbody" id="p-elenco"></div>
 
   <div class="pbody" id="p-acervo" hidden>
+    <div class="cat-picker">
+      <label>Que tipo de material você vai anexar?</label>
+      <select id="cat-sel"></select>
+      <small id="cat-help"></small>
+    </div>
     <label class="filedrop">
       <input type="file" id="pdf-in" accept="application/pdf" multiple hidden>
-      <span>Anexar PDFs de regras, aventura ou ambientação</span>
+      <span>Escolher PDFs</span>
     </label>
     <div id="import-progress" hidden>
       <div class="pbar"><i></i></div>
@@ -107,6 +112,7 @@
       <select id="s-m-mestre"></select>
       <label>Modelo de imagem</label>
       <select id="s-m-imagem"></select>
+      <small class="cathelp" id="s-m-help"></small>
       <button class="primary" id="s-next2">Continuar</button>
     </section>
 
@@ -120,6 +126,8 @@
       <label>Quantos personagens de IA?</label>
       <select id="s-qtd"><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
       <label>Anexar material agora? (opcional)</label>
+      <select id="s-cat"></select>
+      <small id="s-cat-help" class="cathelp"></small>
       <input type="file" id="s-pdf" accept="application/pdf" multiple>
       <div id="s-progress" hidden><div class="pbar"><i></i></div><small id="s-plabel"></small></div>
       <button class="primary" id="s-start">Começar</button>

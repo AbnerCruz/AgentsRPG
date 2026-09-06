@@ -52,6 +52,27 @@ resumo, grava na memória de todos e a sessão encerra — a sobra volta ao caix
 
 Atalho: digitar `/1d20+3` rola o dado localmente, sem chamada de IA.
 
+## Correções desta revisão
+
+- **Modelos de imagem apareciam vazios.** A classificação confundia modelos que *leem* imagem
+  (visão, modalidade `text+image->text`) com os que *geram* imagem. Agora a checagem é feita no
+  lado da saída da modalidade, com o mais barato pré-selecionado.
+- **Modelos com custo zero são reais.** A OpenRouter mantém modelos gratuitos (geralmente com
+  sufixo `:free`), com limite de requisições e fila compartilhada. Ficam em um grupo separado no
+  seletor, marcados como gratuitos, e a sugestão padrão nunca os escolhe — servem para testar, não
+  para sustentar uma sessão inteira.
+- **Voltava para a tela de chaves ao reabrir.** O mapa nunca era salvo depois da criação, então a
+  retomada falhava. Agora chaves, configuração e mundo são gravados antes de qualquer chamada de
+  IA, e a retomada só exige chaves e elenco — se o mapa se perder, ele é regenerado e os tokens
+  recolocados, sem reiniciar a campanha.
+- **"Abrindo a cena" travava em silêncio.** O erro da primeira chamada do mestre era engolido.
+  Agora aparece no log do setup e no feed, a tela de setup fecha de qualquer jeito, e há um botão
+  para tentar de novo. Além disso, modelos que rejeitam `response_format: json_object` agora são
+  detectados e a chamada é repetida sem esse parâmetro.
+- **Acervo por categoria.** Ao anexar, você escolhe o que o material é — regras, aventura,
+  ambientação, bestiário, ficha/template ou homebrew — e cada categoria traz uma linha explicando
+  como o mestre vai usar aquilo. O acervo passa a listar agrupado por categoria.
+
 ## Limites conhecidos
 
 - SRD 5e embutido é um núcleo (raças, classes, perícias, ficha, regras de resolução), não o SRD 5.1
