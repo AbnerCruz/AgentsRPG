@@ -1,145 +1,57 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
-<title>Mesa</title>
-<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="theme-color" content="#111713" />
+  <meta name="color-scheme" content="dark" />
+  <title>AgentsRPG — Crônicas do Aquário</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div id="app">
+    <canvas id="world" aria-label="Mundo simulado"></canvas>
 
-<!-- O cenário é o site. Tudo mais flutua por cima. -->
-<canvas id="stage"></canvas>
+    <header class="topbar glass">
+      <button id="menuBtn" class="iconBtn" aria-label="Abrir menu">☰</button>
+      <div class="brand"><b>AgentsRPG</b><span id="worldMeta">dia 1 · manhã</span></div>
+      <div class="spacer"></div>
+      <button id="chronicleBtn" class="iconBtn" aria-label="Crônica">☷</button>
+      <button id="statsBtn" class="iconBtn" aria-label="Mundo">◫</button>
+    </header>
 
-<!-- Barra superior: só o essencial, sempre visível -->
-<div id="topbar">
-  <span id="scene-name">—</span>
-  <div id="budget-wrap" title="consumo da sessão">
-    <div id="budget-bar"><i></i></div>
-    <span id="budget-text">—</span>
-  </div>
-  <button id="btn-menu" aria-label="menu">≡</button>
-</div>
-
-<!-- Narração: fita inferior, some quando não há nada -->
-<div id="feed"></div>
-
-<!-- Entrada -->
-<div id="composer">
-  <button id="btn-play" title="play/pause" hidden>▶</button>
-  <input id="say" type="text" placeholder="O que você faz?" autocomplete="off">
-  <button id="btn-send">↵</button>
-</div>
-
-<!-- Painel lateral: só abre quando pedido -->
-<aside id="panel" hidden>
-  <header>
-    <nav>
-      <button class="pnav active" data-p="elenco">Elenco</button>
-      <button class="pnav" data-p="acervo">Acervo</button>
-      <button class="pnav" data-p="ajustes">Ajustes</button>
-    </nav>
-    <button id="panel-close">✕</button>
-  </header>
-
-  <div class="pbody" id="p-elenco"></div>
-
-  <div class="pbody" id="p-acervo" hidden>
-    <div class="cat-picker">
-      <label>Que tipo de material você vai anexar?</label>
-      <select id="cat-sel"></select>
-      <small id="cat-help"></small>
+    <div class="timebar glass" role="group" aria-label="Velocidade da simulação">
+      <button data-speed="0">Ⅱ</button><button data-speed="1" class="active">1×</button>
+      <button data-speed="4">4×</button><button data-speed="16">16×</button>
+      <button data-speed="64" title="Avanço rápido sem renderizar cada tick">≫</button>
     </div>
-    <label class="filedrop">
-      <input type="file" id="pdf-in" accept="application/pdf" multiple hidden>
-      <span>Escolher PDFs</span>
-    </label>
-    <div id="import-progress" hidden>
-      <div class="pbar"><i></i></div>
-      <small id="import-label"></small>
-    </div>
-    <div id="art-list"></div>
-  </div>
 
-  <div class="pbody" id="p-ajustes" hidden>
-    <div class="field"><label>Saldo no provedor</label><output id="saldo-live">—</output></div>
-    <div class="field"><label>Caixa da mesa (USD)</label><input type="number" step="0.01" id="f-caixa"></div>
-    <div class="field"><label>Sessões por semana</label>
-      <select id="f-sessoes"><option value="1">1</option><option value="2">2</option></select>
-    </div>
-    <div class="field"><label>Modelo dos agentes</label><select id="f-m-agentes"></select></div>
-    <div class="field"><label>Modelo do mestre</label><select id="f-m-mestre"></select></div>
-    <div class="field"><label>Modelo de imagem</label><select id="f-m-imagem"></select></div>
-    <button id="f-save" class="primary">Salvar</button>
-    <hr>
-    <button id="btn-export">Exportar save</button>
-    <button id="btn-import">Importar save</button>
-    <input type="file" id="import-in" accept=".zip" hidden>
-    <button id="btn-end" class="danger">Encerrar sessão</button>
-  </div>
-</aside>
+    <div id="criticalStrip" class="criticalStrip"></div>
 
-<!-- Ficha do token tocado -->
-<div id="sheet-pop" hidden></div>
+    <aside id="sidePanel" class="panel hidden" aria-live="polite">
+      <div class="panelHead"><div><b id="panelTitle">NPC</b><small id="panelSubtitle"></small></div><button id="panelClose">×</button></div>
+      <div id="panelBody" class="panelBody"></div>
+    </aside>
 
-<!-- Setup inicial: uma coisa por vez, sem formulário gigante -->
-<div id="setup">
-  <div class="setup-card">
-    <h1>Mesa</h1>
-
-    <section class="step active" data-step="0">
-      <p>Cole suas chaves da OpenRouter. Ficam só neste navegador.</p>
-      <input type="password" id="s-api" placeholder="API key (sk-or-...)">
-      <input type="password" id="s-mgmt" placeholder="Management key">
-      <p class="err" id="s-err0"></p>
-      <button class="primary" id="s-next0">Conectar</button>
+    <section id="drawer" class="drawer hidden glass">
+      <div class="drawerHead"><b id="drawerTitle">Crônica</b><button id="drawerClose">×</button></div>
+      <div id="drawerBody" class="drawerBody"></div>
     </section>
 
-    <section class="step" data-step="1">
-      <p>Saldo disponível: <strong id="s-saldo">—</strong></p>
-      <label>Quanto desse saldo esta mesa pode gastar?</label>
-      <input type="number" step="0.01" id="s-caixa" placeholder="0.00">
-      <label>Sessões por semana</label>
-      <select id="s-sessoes"><option value="1">1 por semana</option><option value="2">2 por semana</option></select>
-      <button class="primary" id="s-next1">Continuar</button>
-    </section>
+    <div id="toast" class="toast hidden"></div>
 
-    <section class="step" data-step="2">
-      <label>Modelo dos agentes</label>
-      <select id="s-m-agentes"></select>
-      <label>Modelo do mestre</label>
-      <select id="s-m-mestre"></select>
-      <label>Modelo de imagem</label>
-      <select id="s-m-imagem"></select>
-      <small class="cathelp" id="s-m-help"></small>
-      <button class="primary" id="s-next2">Continuar</button>
-    </section>
-
-    <section class="step" data-step="3">
-      <label>Como você quer jogar?</label>
-      <div class="choices">
-        <button class="choice" data-modo="mestre-ia">A IA mestra, eu jogo um personagem</button>
-        <button class="choice" data-modo="mestre-eu">Eu sou o mestre, as IAs jogam</button>
-        <button class="choice" data-modo="so-ia">Só as IAs jogam, eu assisto</button>
+    <div id="boot" class="boot">
+      <div class="bootCard">
+        <div class="crest">◆</div>
+        <h1>Crônicas do Aquário</h1>
+        <p>Você não controla ninguém. Observe uma comunidade nascer, lembrar, amar, construir e decidir por conta própria se vale a pena descer.</p>
+        <label>Seed do mundo<input id="seedInput" inputmode="numeric" autocomplete="off" /></label>
+        <div class="bootActions"><button id="continueBtn" class="secondary hidden">Continuar</button><button id="newBtn">Novo mundo</button></div>
+        <small>Simulação local · sem IA externa · salvamento no dispositivo</small>
       </div>
-      <label>Quantos personagens de IA?</label>
-      <select id="s-qtd"><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
-      <label>Anexar material agora? (opcional)</label>
-      <select id="s-cat"></select>
-      <small id="s-cat-help" class="cathelp"></small>
-      <input type="file" id="s-pdf" accept="application/pdf" multiple>
-      <div id="s-progress" hidden><div class="pbar"><i></i></div><small id="s-plabel"></small></div>
-      <button class="primary" id="s-start">Começar</button>
-    </section>
-
-    <div id="boot-log"></div>
+    </div>
   </div>
-</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
-<script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';</script>
-<script type="module" src="main.js"></script>
+  <script type="module" src="src/main.js"></script>
 </body>
 </html>

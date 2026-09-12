@@ -1,0 +1,15 @@
+import {MAP_W,MAP_H,TILE_TYPE,RESOURCE,BUILDING} from '../core/constants.js';
+export class World{
+ constructor(rng){this.rng=rng;this.tiles=new Uint8Array(MAP_W*MAP_H);this.resources=[];this.buildings=[];this.stock=new Float32Array(RESOURCE.COUNT);this.monsters=[];this.dungeon={x:MAP_W-10,y:10};this.generate()}
+ idx(x,y){return y*MAP_W+x} inside(x,y){return x>=0&&y>=0&&x<MAP_W&&y<MAP_H} tile(x,y){return this.tiles[this.idx(Math.floor(x),Math.floor(y))]}
+ generate(){const r=this.rng,cx=MAP_W/2,cy=MAP_H/2;for(let y=0;y<MAP_H;y++)for(let x=0;x<MAP_W;x++){let t=TILE_TYPE.GRASS;if(x<4||y<4||x>MAP_W-5||y>MAP_H-5)t=TILE_TYPE.FOREST;const riverX=Math.floor(MAP_W*.23+Math.sin(y*.22)*2);if(Math.abs(x-riverX)<2)t=TILE_TYPE.WATER;this.tiles[this.idx(x,y)]=t;if(t===TILE_TYPE.GRASS&&r.chance(.075))this.addResource(RESOURCE.FOOD,x+.5,y+.5,r.range(2,7),.002);if(t===TILE_TYPE.FOREST&&r.chance(.16))this.addResource(RESOURCE.WOOD,x+.5,y+.5,r.range(8,20),.001)}for(let k=0;k<90;k++){const x=r.int(6,MAP_W-7),y=r.int(6,MAP_H-7);if(this.tile(x,y)===TILE_TYPE.GRASS){this.tiles[this.idx(x,y)]=TILE_TYPE.STONE;this.addResource(r.chance(.23)?RESOURCE.IRON:RESOURCE.STONE,x+.5,y+.5,r.range(8,28),0)}}for(let y=0;y<MAP_H;y++)for(let x=0;x<MAP_W;x++)if(this.tile(x,y)===TILE_TYPE.WATER&&r.chance(.18))this.addResource(RESOURCE.WATER,x+.5,y+.5,999,.02);for(let x=cx-6;x<=cx+6;x++)this.tiles[this.idx(x,cy)]=TILE_TYPE.ROAD;for(let y=cy-5;y<=cy+5;y++)this.tiles[this.idx(cx,y)]=TILE_TYPE.ROAD;this.tiles[this.idx(this.dungeon.x,this.dungeon.y)]=TILE_TYPE.DUNGEON;this.buildings.push({type:BUILDING.SHELTER,x:cx-2,y:cy-2,hp:1},{type:BUILDING.STORAGE,x:cx+2,y:cy+1,hp:1});this.stock.set([28,12,2,8,35,0,30])}
+ addResource(kind,x,y,amount,regen){this.resources.push({kind,x,y,amount,max:amount,regen})}
+ nearestResource(x,y,kind){let best=null,bd=1e9;for(const r of this.resources)if(r.kind===kind&&r.amount>.05){const d=Math.hypot(r.x-x,r.y-y);if(d<bd){bd=d;best={...r,d,ref:r}}}return best}
+ harvest(ref,amt){if(!ref)return 0;const n=Math.min(ref.amount,amt);ref.amount-=n;return n}
+ nearestBuilding(x,y,type=null){let best=null,bd=1e9;for(const b of this.buildings)if(type==null||b.type===type){const d=Math.hypot(b.x-x,b.y-y);if(d<bd){bd=d;best={...b,d,ref:b}}}return best}
+ nearBuilding(x,y,type,rad=3){return this.buildings.some(b=>(type==null||b.type===type)&&Math.hypot(b.x-x,b.y-y)<=rad)}
+ threatAt(x,y){let t=0;for(const m of this.monsters)if(m.hp>0){const d=Math.hypot(m.x-x,m.y-y);if(d<7)t=Math.max(t,1-d/7)}return t}
+ tick(){for(const r of this.resources)if(r.regen&&r.amount<r.max)r.amount=Math.min(r.max,r.amount+r.regen)}
+ serialize(){return{tiles:Array.from(this.tiles),resources:this.resources.map(r=>({...r})),buildings:this.buildings,stock:Array.from(this.stock),monsters:this.monsters,dungeon:this.dungeon}}
+ static hydrate(d,rng){const w=Object.create(World.prototype);w.rng=rng;w.tiles=Uint8Array.from(d.tiles);w.resources=d.resources;w.buildings=d.buildings;w.stock=Float32Array.from(d.stock);w.monsters=d.monsters||[];w.dungeon=d.dungeon;return w}
+}

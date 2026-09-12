@@ -1,0 +1,3 @@
+import {DAY_TICKS} from '../core/constants.js';
+export function lifecycleTick(sim){const n=sim.npcs;for(const i of n.living()){n.age[i]+=1/(DAY_TICKS*12);if(n.hp[i]<=0){die(sim,i,n.need(i,0)>.95?'fome':n.need(i,1)>.97?'sede':'ferimentos');continue}const max=n.derived(i).longevity;if(n.age[i]>max&&sim.rng.chance(.00015*(n.age[i]-max+1)))die(sim,i,'velhice')}}
+function die(sim,i,cause){const n=sim.npcs;n.kill(i,cause);sim.log('morte',`${n.names[i]} morreu por ${cause}.`,1,i);for(const j of n.living()){const r=sim.memory.relation(j,i);const weight=Math.max(0,r.affection+r.respect+r.trust);if(weight>.15)sim.memory.remember(j,{type:'morte',text:`${n.names[i]} morreu por ${cause}.`,tick:sim.tick,valence:-8,importance:Math.min(1,.55+weight*.25),reflectionKey:'morte'})}}

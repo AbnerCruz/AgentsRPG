@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {Simulation} from '../src/simulation.js';
+const sim=new Simulation(42);
+for(let i=0;i<28800;i++)sim.step();
+assert.equal(sim.tick,28800);
+assert.ok(sim.npcs.count>=12,'a genealogia não pode perder os fundadores');
+assert.ok(sim.npcs.living().length>0,'a vila deve sobreviver ao teste de 120 dias');
+assert.ok(sim.world.buildings.length>=4,'a vila deve construir estruturas');
+assert.ok(sim.chronicle.length>0,'a crônica deve registrar eventos');
+assert.equal(sim.dungeon.boss.alive,false,'a seed de teste deve conseguir derrotar o chefe sem intervenção');
+const restored=Simulation.hydrate(sim.serialize());
+restored.step();
+assert.equal(restored.tick,28801,'save/load deve preservar o tick');
+console.log(`OK: dia ${restored.meta().day}, ${restored.npcs.living().length} vivos, ${restored.world.buildings.length} estruturas, dungeon ${restored.dungeon.deepest}/10`);

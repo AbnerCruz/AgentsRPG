@@ -1,0 +1,10 @@
+export const MAP_W=72, MAP_H=72, TILE=16, MAX_NPCS=128;
+export const NEED={HUNGER:0,THIRST:1,SLEEP:2,TEMP:3,SAFETY:4,SOCIAL:5,PURPOSE:6,COUNT:7};
+export const GENE={STRENGTH:0,ENDURANCE:1,SPEED:2,DEXTERITY:3,FERTILITY:4,LONGEVITY:5,METABOLISM:6,DISEASE:7,COLD:8,LEARNING:9,MEMORY:10,PERCEPTION:11,CREATIVITY:12,AGGRESSION:13,SOCIABILITY:14,AMBITION:15,CAUTION:16,LOYALTY:17,GREED:18,CURIOSITY:19,STUBBORN:20,EMPATHY:21,SKIN:22,HAIR:23,HEIGHT:24,BUILD:25,RARE_A:26,RARE_B:27,COUNT:28};
+export const SKILLS=['mineração','lenha','agricultura','caça','pesca','culinária','construção','ferraria','marcenaria','alfaiataria','combate','arco','cura','negociação'];
+export const RESOURCE={WOOD:0,STONE:1,IRON:2,WHEAT:3,WATER:4,LEATHER:5,FOOD:6,COUNT:7,NAMES:['madeira','pedra','ferro','trigo','água','couro','comida']};
+export const TILE_TYPE={GRASS:0,WATER:1,FOREST:2,STONE:3,FARM:4,ROAD:5,DUNGEON:6,BUILDING:7};
+export const BUILDING={SHELTER:0,FARM:1,FORGE:2,STORAGE:3,NAMES:['abrigo','fazenda','forja','armazém']};
+export const PROF=['sem profissão','fazendeiro','lenhador','minerador','ferreiro','guerreiro'];
+export const ACTION={IDLE:'observar',EAT:'comer',DRINK:'beber',SLEEP:'dormir',WARM:'buscar abrigo',FORAGE:'buscar comida',WATER:'buscar água',WOOD:'cortar madeira',STONE:'coletar pedra',IRON:'minerar ferro',FARM:'cultivar',SOCIAL:'conversar',BUILD:'construir',EXPLORE:'explorar',DUNGEON:'descer à dungeon',FIGHT:'lutar'};
+export const DAY_TICKS=240;
