@@ -1,60 +1,46 @@
 # AgentsRPG — Crônicas do Aquário
 
-Simulador observacional de NPCs autônomos em fantasia medieval, feito em HTML5 Canvas e JavaScript puro para rodar diretamente no GitHub Pages, inclusive em celular. O jogador não controla os NPCs: observa, inspeciona decisões e acompanha a história emergente.
+Simulador observacional de NPCs autônomos em fantasia medieval, feito em HTML5 Canvas e JavaScript puro para GitHub Pages e celular. O jogador não controla os NPCs: observa, inspeciona decisões e acompanha a história emergente.
 
-## Arquitetura
+## Núcleo
 
-O núcleo não usa LLM. Cada NPC combina necessidades, Utility AI, planejamento regressivo curto, genética, skills, memória e reflexão. O estado numérico principal usa TypedArrays; o mundo usa RNG com seed reproduzível. O app salva snapshots em IndexedDB e, ao retornar, recupera parte do tempo transcorrido em modo acelerado.
+O cérebro dos NPCs é local e determinístico: necessidades, Utility AI, compromisso de ação, planejamento regressivo curto, memória, reflexão, genética, skills e relações. LLM não participa da tomada de decisão.
 
-Principais sistemas implementados:
+Esta revisão corrige os principais problemas encontrados nos testes longos:
 
-- necessidades: fome, sede, sono, temperatura, segurança, social e propósito;
-- Utility AI com top scores visíveis no painel do NPC;
-- planejador com pré-requisitos, plano atual e justificativa;
-- memória episódica, semântica e relacional; recuperação e crenças por reflexão;
-- genoma de 28 traços, herança, mutação, atributos derivados e variação visual;
-- ciclo de vida, infância, aprendizagem com adultos, casais, reprodução, morte e genealogia;
-- skills por uso e profissões emergentes;
-- recursos finitos, estoques, agricultura, coleta e construção autônoma;
-- combate, ataques da dungeon, prestígio, expedições e mini-chefe;
-- crônica, painel de mundo, médias genéticas, estoque e histórico populacional;
-- Canvas pixel art, câmera com pan, zoom/pinch e inspeção por toque;
-- velocidades pausa, 1×, 4×, 16× e avanço rápido;
-- PWA/cache offline e persistência IndexedDB.
+- **commitment de ação:** viagens não são mais descartadas a cada nova decisão; teimosia genética aumenta a persistência e emergências interrompem apenas quando necessário;
+- **água:** poço, retorno ao armazém, retirada e depósito comunitário e instrumentação de viagens;
+- **agricultura real:** plantar consome trigo/semente, a lavoura cresce no tempo e a colheita devolve comida + parte das sementes; não existe mais comida criada do nada;
+- **segurança genética:** lutar e fugir são opções normais da Utility AI, moduladas por agressividade, cautela e ameaça;
+- **economia de ferro:** a forja consome ferro e madeira e produz ferramentas/armas que afetam coleta e combate; ferraria passa a ser uma profissão alcançável;
+- **dungeon:** o save já usa `floors[].rooms[]`, mantendo um único andar no MVP e deixando a estrutura pronta para novos andares;
+- **memória:** mortos são compactados para suas memórias mais importantes e relações antigas são liberadas;
+- **persistência:** tiles determinísticos não são mais serializados, scores/planos são recomputados e autosave é agendado fora do step normal;
+- **limite populacional:** atingir `MAX_NPCS` não lança mais exceção nem derruba o loop;
+- **LOD:** NPCs calmos e fora da câmera têm decisões reduzidas; agentes em viagem, perigo ou necessidade relevante continuam no ciclo normal;
+- **PWA:** todos os módulos essenciais entram no precache e o cache ganhou versão nova;
+- **skills:** slots antigos continuam no formato de save por compatibilidade, mas apenas skills realmente treináveis aparecem e se propagam no jogo.
+
+## Testes de balanceamento
+
+`npm test` roda a suíte estatística multi-seed: 10 seeds por 300 dias, zero extinções, contrato de chefe morto em pelo menos 40% das seeds até o dia 250, round-trip de save/load, taxa mínima de conclusão de viagens e guarda de variância genética.
+
+Scripts adicionais:
+
+```bash
+npm run diagnose   # tabela multi-seed de população, mortes, recursos, genes e save
+npm run long       # seed 7919 por 600 dias
+npm run travel     # conclusão/abandono de viagens, incluindo água separadamente
+```
+
+Na instrumentação usada nesta revisão, a seed 7919 passou de ~6% de conclusão das viagens de água para aproximadamente 99% em 200 dias. A corrida de 600 dias termina com população viva e save abaixo de 200 KB na medição atual.
 
 ## Executar
 
-Não há build nem dependências de runtime. Sirva a raiz por HTTP:
+Não há build nem dependências de runtime:
 
 ```bash
 python3 -m http.server 8000
 ```
 
 ou publique a branch `main` no GitHub Pages.
-
-## Teste de simulação
-
-Requer apenas Node.js moderno:
-
-```bash
-npm test
-```
-
-O smoke test roda 120 dias simulados, verifica sobrevivência, construção, crônica, conclusão da dungeon e round-trip de save/load.
-
-## Estrutura
-
-- `src/core`: clock, loop, RNG, persistência e constantes
-- `src/world`: geração do mapa, recursos e estruturas
-- `src/entities`: armazenamento dos NPCs
-- `src/ai`: drives, Utility AI, planner e memória
-- `src/genetics`: genoma, herança e atributos derivados
-- `src/systems`: ações, profissões, relações, reprodução e ciclo de vida
-- `src/dungeon`: pressão externa, expedições, salas e chefe
-- `src/render`: Canvas, câmera e pixel art
-- `src/ui`: observação, inspeção, crônica, mundo e linhagens
-- `src/narrative`: templates locais de narração
-
-## Princípio de produto
-
-O observatório é a interface principal: toda decisão deve poder ser investigada sem dar ordens ao NPC. A narrativa nasce dos sistemas e das memórias, não de eventos roteirizados.

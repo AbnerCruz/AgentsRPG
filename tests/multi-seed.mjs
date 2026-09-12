@@ -1,0 +1,5 @@
+import {Simulation} from '../src/simulation.js';
+import {GENE,RESOURCE} from '../src/core/constants.js';
+const seeds=Array.from({length:10},(_,i)=>1009+i*7919),days=300,out=[];
+for(const seed of seeds){const s=new Simulation(seed);for(let i=0;i<days*240;i++)s.step();const live=s.npcs.living();const deaths={};for(let i=0;i<s.npcs.count;i++)if(!s.npcs.alive[i]&&s.npcs.deathCause[i])deaths[s.npcs.deathCause[i]]=(deaths[s.npcs.deathCause[i]]||0)+1;const gs=[GENE.AGGRESSION,GENE.CAUTION,GENE.AMBITION,GENE.EMPATHY].map(g=>{const a=live.map(i=>s.npcs.gene(i,g)),m=a.reduce((x,y)=>x+y,0)/Math.max(1,a.length);return Math.sqrt(a.reduce((x,y)=>x+(y-m)**2,0)/Math.max(1,a.length))});out.push({seed,alive:live.length,boss:!s.dungeon.boss.alive,deepest:s.dungeon.deepest,water:+s.world.stock[RESOURCE.WATER].toFixed(1),food:+s.world.stock[RESOURCE.FOOD].toFixed(1),iron:+s.world.stock[RESOURCE.IRON].toFixed(1),deaths:JSON.stringify(deaths),geneStd:+(gs.reduce((a,b)=>a+b,0)/gs.length).toFixed(3),saveKB:+(JSON.stringify(s.serialize()).length/1024).toFixed(1)})}
+console.table(out);

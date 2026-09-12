@@ -1,1 +1,1 @@
-export function updateProfessions(npcs,i){const s=(k)=>npcs.skill(i,k);let p=0,best=.22;for(const[cand,val]of[[1,s(2)],[2,s(1)],[3,s(0)],[4,s(7)],[5,s(10)]])if(val>best){best=val;p=cand}npcs.prof[i]=p}
+export function updateProfessions(npcs,i){const s=(k)=>npcs.skill(i,k);let p=0,best=.2;for(const[cand,val]of[[1,s(2)],[2,s(1)],[3,s(0)],[4,s(7)],[5,s(10)]])if(val>best){best=val;p=cand}npcs.prof[i]=p}
