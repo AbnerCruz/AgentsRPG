@@ -60,7 +60,7 @@ for(let i=0;i<48;i++)original.step();
 const restored=Simulation.hydrate(transported(original.serialize()));
 assertStateEqual(restored,original,'hidratação deve reproduzir exatamente o estado salvo');
 const hiddenWorld=diffWorldInternals(restored,original);
-assert.equal(hiddenWorld.length,0,`hidratação compacta diverge internamente antes do primeiro tick: ${hiddenWorld.join(', ')}`);
+assert.equal(hiddenWorld.length,0,`hidratação compacta diverge internamente antes do primeiro tick: ${hiddenWorld.join(', ')}; world=${firstWorldDiff(restored,original)}`);
 // plan/scores/animation are derived presentation state; behavior must not depend on them.
 for(let i=1;i<=72;i++){
  original.step();restored.step();

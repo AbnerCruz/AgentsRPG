@@ -10,6 +10,7 @@ import {installLayerInspector} from './render/layers.js';
 import {installPhaseCOverlay} from './render/phasec.js';
 import {UI} from './ui/ui.js';
 import './ui/construction.js';
+import './ui/task-planning.js';
 import {installPhaseBUI} from './ui/phaseb.js';
 let sim,renderer,ui,loop,lastSaveTick=0,saveQueued=false;
 const seedInput=document.querySelector('#seedInput'),status=document.querySelector('#bootStatus'),newBtn=document.querySelector('#newBtn'),continueBtn=document.querySelector('#continueBtn');
