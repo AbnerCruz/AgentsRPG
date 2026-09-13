@@ -1,6 +1,6 @@
 import {Simulation} from './simulation.js';
 import {RNG} from './core/rng.js';
-import {VERSION,MAX_NPCS,TILE_TYPE} from './core/constants.js';
+import {VERSION,MAX_NPCS,TILE_TYPE,MAP_W,MAP_H} from './core/constants.js';
 import {World} from './world/world.js';
 import {NPCStore} from './entities/npcs.js';
 import {MemorySystem} from './ai/memory.js';
@@ -38,19 +38,19 @@ function seedPopulation(sim,count){
  const w=sim.world,n=sim.npcs,seeds=w.spawnSeeds?.length?w.spawnSeeds:[w.settlement];
  for(let k=0;k<count;k++){
   const base=seeds[k%seeds.length];
-  const p=nearbyLand(sim,base.x,base.y,k);
+  const p=nearbyLand(sim,base.x,base.y);
   const i=n.create(sim.rng,p.x,p.y,{tool:0});
   if(i<0)break;
   sim.memory.ensure(i,sim.memory.spatialCapacity(n,i));
  }
 }
 
-function nearbyLand(sim,x,y,salt){
+function nearbyLand(sim,x,y){
  const w=sim.world;
  for(let tries=0;tries<24;tries++){
   const a=sim.rng.range(0,Math.PI*2),r=tries<4?sim.rng.range(.2,2.2):sim.rng.range(.2,5.5);
-  const nx=Math.max(1.5,Math.min(w.tiles.length?191.5:191.5,x+Math.cos(a)*r));
-  const ny=Math.max(1.5,Math.min(191.5,y+Math.sin(a)*r));
+  const nx=Math.max(1.5,Math.min(MAP_W-1.5,x+Math.cos(a)*r));
+  const ny=Math.max(1.5,Math.min(MAP_H-1.5,y+Math.sin(a)*r));
   const t=w.tile(nx,ny);
   if(t!==TILE_TYPE.WATER&&t!==TILE_TYPE.MOUNTAIN)return{x:nx,y:ny};
  }
