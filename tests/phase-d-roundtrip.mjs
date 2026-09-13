@@ -28,6 +28,8 @@ function firstNpcSerializedDiff(a,b){
  }
  return'none';
 }
+function npcSnapshot(sim,i){const n=sim.npcs;return{uid:n.uid[i],x:n.x[i],y:n.y[i],state:n.state[i],action:n.action[i],taskKind:n.taskKind[i],targetX:n.taskTargetX[i],targetY:n.taskTargetY[i],targetRef:n.taskTargetRef[i],progress:n.taskProgress[i],duration:n.taskDuration[i],timeout:n.taskTimeout[i],pathIndex:n.pathIndex[i],facing:n.facing[i],route:n.getRoute(i)?Array.from(n.getRoute(i)):null,intent:n.intent[i]};}
+function firstPhysicalNpcDiff(a,b){for(let i=0;i<Math.max(a.npcs.count,b.npcs.count);i++){const A=npcSnapshot(a,i),B=npcSnapshot(b,i);if(JSON.stringify(A)!==JSON.stringify(B))return`${i}:${JSON.stringify(A)}/${JSON.stringify(B)}`}return'none'}
 function firstWorldDiff(a,b){
  const A=a.world.serialize(),B=b.world.serialize();
  for(const k of Object.keys(A)){
@@ -46,7 +48,7 @@ function firstMemoryDiff(a,b){
  return'none';
 }
 function firstPerceptionDiff(a,b){
- const A=a.lastPerception,B=b.lastPerception;for(let i=0;i<Math.max(A.length,B.length);i++)if(JSON.stringify(A[i])!==JSON.stringify(B[i]))return`${i}:${hash(A[i])}/${hash(B[i])}`;return'none';
+ const A=a.lastPerception,B=b.lastPerception;for(let i=0;i<Math.max(A.length,B.length);i++)if(JSON.stringify(A[i])!==JSON.stringify(B[i]))return`${i}:${JSON.stringify(A[i])}/${JSON.stringify(B[i])}`;return'none';
 }
 function assertStateEqual(a,b,label){const bad=diffState(a,b);assert.equal(bad.length,0,`${label}; divergências: ${bad.join(', ')}`)}
 
@@ -60,6 +62,6 @@ assert.equal(hiddenWorld.length,0,`hidratação compacta diverge internamente an
 for(let i=1;i<=72;i++){
  original.step();restored.step();
  const bad=diffState(restored,original);
- assert.equal(bad.length,0,`save/load divergiu no tick continuado ${i} (tick global ${original.tick}); ${bad.join(', ')}; npc=${firstNpcSerializedDiff(restored,original)}; world=${firstWorldDiff(restored,original)}; memory=${firstMemoryDiff(restored,original)}; perception=${firstPerceptionDiff(restored,original)}`);
+ assert.equal(bad.length,0,`save/load divergiu no tick continuado ${i} (tick global ${original.tick}); ${bad.join(', ')}; npc=${firstNpcSerializedDiff(restored,original)}; físico=${firstPhysicalNpcDiff(restored,original)}; world=${firstWorldDiff(restored,original)}; memory=${firstMemoryDiff(restored,original)}; perception=${firstPerceptionDiff(restored,original)}`);
 }
 console.log('OK Phase D round-trip: save/hydrate preserva e continua o estado determinístico');
