@@ -3,10 +3,11 @@ import {SPATIAL_FLAG} from './memory.js';
 import {isNight} from '../core/clock.js';
 import {sensoryFor} from '../systems/senses.js';
 import {technologyFor} from '../systems/technology.js';
+import {BALANCE} from '../calibration/balance.js';
 
 export function perceive(sim,i){
  const n=sim.npcs,w=sim.world,m=sim.memory,d=n.derived(i),night=isNight(sim.tick),biome=w.biome(n.x[i],n.y[i]);
- let short=d.perception,long=d.longPerception;
+ let short=d.perception*BALANCE.perceptionShortMult,long=d.longPerception*BALANCE.perceptionLongMult;
  if(night){short*=.42;long*=.35}
  if(biome===BIOME.DENSE_FOREST){short*=.68;long*=.55}else if(biome===BIOME.MARSH){short*=.78;long*=.75}else if(biome===BIOME.FIELD||biome===BIOME.BEACH||biome===BIOME.MOUNTAIN)long*=1.18;
  const id=w.idx(n.x[i],n.y[i]),e=w.elevation?.[id]||0;long*=1+Math.max(0,e-.55)*1.1;
