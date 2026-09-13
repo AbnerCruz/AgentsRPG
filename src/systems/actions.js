@@ -22,6 +22,8 @@ const difficultyFor={
  [ACTION.FISH]:1.05,[ACTION.HUNT]:1.15,[ACTION.COOK]:1,[ACTION.TAILOR]:1.1,[ACTION.FORGE]:1.15,
  [ACTION.CARE]:1,[ACTION.SOCIAL]:1,[ACTION.TEACH]:1,[ACTION.BUILD]:1,[ACTION.DUNGEON]:1.35,[ACTION.FIGHT]:1
 };
+const MIN_MOVEMENT_SPEED=.008,TRAVEL_TIMEOUT_SLACK=1.35;
+export function taskTimeoutFor(distance,duration){const travel=Math.ceil(Math.max(0,distance)/MIN_MOVEMENT_SPEED*TRAVEL_TIMEOUT_SLACK),work=Math.ceil(Math.max(1,duration)*3);return Math.max(240,travel+work+180)}
 
 export function prepareAction(sim,i,action,perception={}){
  const n=sim.npcs,w=sim.world;
@@ -46,7 +48,7 @@ export function prepareAction(sim,i,action,perception={}){
  else if(action===ACTION.BUILD){const owner=n.uid[i];let x=w.nextBlueprintPiece(owner);if(!x){const type=nextBuildingType(sim,i),pos=buildSpot(sim,i);w.createBlueprint(type,pos.x,pos.y,owner);x=w.nextBlueprintPiece(owner)}if(!x)return resetPrepared(n,i);if(!x.piece.reserved){if(n.inventory[i][x.piece.material]<x.piece.cost)return resetPrepared(n,i);n.inventory[i][x.piece.material]-=x.piece.cost;x.piece.reserved=true}intent.meta.blueprint=x.bp.id;intent.meta.pieceIndex=x.bp.pieces.indexOf(x.piece);intent.targetX=x.piece.x;intent.targetY=x.piece.y;intent.targetId=x.bp.id;n.taskTargetRef[i]=x.bp.id}
  else if(action===ACTION.EXPLORE){const q=exploreTarget(sim,i);intent.targetX=q.x;intent.targetY=q.y;intent.meta.exploreChunk=q.chunk??-1}
  else if(action===ACTION.DUNGEON){const known=knownDungeons(sim,i),site=known[0];if(!site||n.inventory[i][RESOURCE.WATER]<.2)return resetPrepared(n,i);intent.targetId=site.id??site.tile;n.taskTargetRef[i]=intent.targetId;const q=approach(w,site.x,site.y);intent.targetX=q.x;intent.targetY=q.y;intent.sourceX=site.x;intent.sourceY=site.y}
- n.intent[i]=intent;n.taskTargetX[i]=intent.targetX;n.taskTargetY[i]=intent.targetY;if(n.taskTargetRef[i]<0)n.taskTargetRef[i]=intent.targetId??-1;n.taskProgress[i]=readTargetProgress(sim,i,intent);n.taskDuration[i]=taskDurationFor(sim,i,action,intent);const distance=Math.hypot(intent.targetX-n.x[i],intent.targetY-n.y[i]);n.taskTimeout[i]=sim.tick+Math.max(180,Math.ceil(distance/.018)+Math.ceil(n.taskDuration[i]*3)+120);n.state[i]=distance>arrivalDistance(action)?NPC_STATE.MOVING:stateForAction(action);n.animFrame[i]=0;n.animTimer[i]=0;
+ n.intent[i]=intent;n.taskTargetX[i]=intent.targetX;n.taskTargetY[i]=intent.targetY;if(n.taskTargetRef[i]<0)n.taskTargetRef[i]=intent.targetId??-1;n.taskProgress[i]=readTargetProgress(sim,i,intent);n.taskDuration[i]=taskDurationFor(sim,i,action,intent);const distance=Math.hypot(intent.targetX-n.x[i],intent.targetY-n.y[i]);n.taskTimeout[i]=sim.tick+taskTimeoutFor(distance,n.taskDuration[i]);n.state[i]=distance>arrivalDistance(action)?NPC_STATE.MOVING:stateForAction(action);n.animFrame[i]=0;n.animTimer[i]=0;
  if(TRAVEL_ACTIONS.has(action)){sim.travel.started++;sim.travel.byAction[action]=(sim.travel.byAction[action]||0)+1}sim.actionHistogram[action]=(sim.actionHistogram[action]||0)+1;if(sim.tasks){sim.tasks.started++;sim.tasks.byAction[action]=(sim.tasks.byAction[action]||0)+1}return true;
 }
 function resetPrepared(n,i){n.action[i]=ACTION.IDLE;n.state[i]=NPC_STATE.IDLE;n.taskKind[i]=ACTION_ID[ACTION.IDLE];n.taskProgress[i]=0;n.taskDuration[i]=0;n.taskTimeout[i]=0;n.taskTargetRef[i]=-1;n.intent[i]=null;return false}
