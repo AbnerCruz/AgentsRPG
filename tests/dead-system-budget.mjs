@@ -4,6 +4,10 @@ import {ACTION,DAY_TICKS,NEED} from '../src/core/constants.js';
 import {scoreActions} from '../src/ai/utility.js';
 
 const sim=new Simulation(7070),days=40,total=days*DAY_TICKS;
+// This is a systems test, not a near-camera animation test. Keep every NPC in
+// analytic LOD so 40 simulated days stay cheap while decisions/needs/memory/
+// construction still execute through the real Simulation.step() path.
+sim.viewX=-999;sim.viewY=-999;
 const needPeak=new Float64Array(NEED.COUNT),actions=[ACTION.SLEEP,ACTION.WARM,ACTION.RETURN,ACTION.FORAGE,ACTION.WATER,ACTION.WOOD,ACTION.STONE,ACTION.BUILD,ACTION.EXPLORE,ACTION.SOCIAL],scorePeak=Object.fromEntries(actions.map(a=>[a,0]));
 for(let t=0;t<total;t++){
  sim.step();
