@@ -61,7 +61,7 @@ export class TechnologySystem{
  knows(n,i,t){return t<32?!!(n.techKnownLo[i]&(1<<t)):!!(n.techKnownHi[i]&(1<<(t-32)))}
  setKnown(n,i,t,sourceUid=-1,tick=0){if(this.knows(n,i,t))return false;if(t<32)n.techKnownLo[i]|=1<<t;else n.techKnownHi[i]|=1<<(t-32);n.techProgress[i*TECH_COUNT+t]=255;n.techSource[i*TECH_COUNT+t]=sourceUid;n.techLearnTick[i*TECH_COUNT+t]=tick;return true}
  knownList(i){const n=this.sim?.npcs;if(!n)return[];const out=[];for(let t=0;t<TECH_COUNT;t++)if(this.knows(n,i,t))out.push(t);return out}
- canAction(i,action,sim=this.sim){const t=ACTION_TECH.get(action);if(t==null)return true;const n=sim?.npcs;if(!n)return false;return this.knows(n,i,t)}
+ canAction(i,action,sim=this.sim){if(action===ACTION.WOOD)return true;const t=ACTION_TECH.get(action);if(t==null)return true;const n=sim?.npcs;if(!n)return false;return this.knows(n,i,t)}
  countKnown(n,i){let c=0;for(let t=0;t<TECH_COUNT;t++)if(this.knows(n,i,t))c++;return c}
  prerequisites(n,i,t){return !!TECH[t]&&TECH[t].pre.every(p=>this.knows(n,i,p))}
  availableMaterial(sim,i,t){
