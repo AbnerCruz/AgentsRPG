@@ -14,7 +14,8 @@ for(const i of sim.npcs.living()){
  assert.equal(sim.memory.spatial.get(i)?.count||0,0,'mapa mental deve começar sem marcos');
 }
 assert.equal(sim.technology.canAction(0,ACTION.DRINK),true,'sobrevivência básica não exige técnica');
-assert.equal(sim.technology.canAction(0,ACTION.WOOD),false,'cortar madeira exige técnica');
+assert.equal(sim.technology.canAction(0,ACTION.WOOD),true,'Fase D permite coleta primitiva de madeira antes de derrubar árvores');
+assert.equal(sim.technology.canAction(0,ACTION.IRON),false,'mineração de ferro continua exigindo técnica');
 for(let t=0;t<240;t++)sim.step();
 assert.equal(sim.npcs.living().length>0,true,'simulação deve continuar executando');
 const save=sim.serialize();
@@ -37,4 +38,4 @@ discovery.rng.chance=originalChance;
 assert.equal(discovery.technology.knows(discovery.npcs,i,0),true,'progresso focado deve permitir descobrir a técnica raiz de pedra');
 
 const disease=createNewSimulation(91,null),d=disease.npcs.living()[0];disease.npcs.activeDisease[d]=1;disease.npcs.diseaseTimer[d]=0;disease.step();assert.equal(disease.npcs.diseaseTimer[d],1,'doença deve avançar uma única vez por tick');
-console.log('OK Phase C: estado zero, descoberta focada, doença única, save compacto e hydrate');
+console.log('OK Phase C/D: estado zero, madeira primitiva, descoberta focada, doença única, save compacto e hydrate');
