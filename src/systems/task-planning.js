@@ -1,24 +1,27 @@
-import {ACTION,ACTION_ID,RESOURCE,NUTRITION,NPC_STATE,GENE,TRAVEL_ACTIONS} from '../core/constants.js';
+import {ACTION,ACTION_ID,RESOURCE,NUTRITION,NPC_STATE,GENE} from '../core/constants.js';
 import {arrivalDistance,stateForAction,taskDurationFor,taskTimeoutFor,readTargetProgress,writeTargetProgress} from './actions.js';
 import {foodExposure,waterExposure} from './disease.js';
-import {technologyFor} from './technology.js';
+import {knownResource} from '../ai/perception.js';
 
 const MAX_STACK=3;
 const RESUMABLE=new Set([ACTION.RETURN,ACTION.FORAGE,ACTION.WATER,ACTION.WOOD,ACTION.STONE,ACTION.IRON,ACTION.FARM,ACTION.FISH,ACTION.HUNT,ACTION.COOK,ACTION.TAILOR,ACTION.FORGE,ACTION.BUILD,ACTION.EXPLORE,ACTION.DUNGEON]);
 const DISCARDABLE=new Set([ACTION.SOCIAL,ACTION.TEACH,ACTION.SLEEP,ACTION.WARM,ACTION.IDLE]);
 const URGENT=new Set([ACTION.FLEE,ACTION.FIGHT,ACTION.CARE]);
 const ATOMIC=new Set([ACTION.EAT,ACTION.DRINK]);
+const LONG_GOALS=new Set([ACTION.RETURN,ACTION.STONE,ACTION.IRON,ACTION.EXPLORE,ACTION.DUNGEON]);
 const FOOD=[RESOURCE.BERRY,RESOURCE.GRAIN,RESOURCE.MEAT,RESOURCE.FISH,RESOURCE.EGG,RESOURCE.MILK,RESOURCE.PRESERVED];
 const cloneIntent=int=>int?JSON.parse(JSON.stringify(int)):null;
 
 export function ensureTaskPlanning(sim){
- if(!sim.taskStacks)sim.taskStacks=Array.from({length:sim.npcs?.alive?.length||512},()=>[]);
- if(!sim.taskPlanning)sim.taskPlanning={suspended:0,resumed:0,invalidated:0,discarded:0,atomic:0,opportunistic:0};
+ const size=sim.npcs?.alive?.length||512;if(!sim.taskStacks)sim.taskStacks=Array.from({length:size},()=>[]);if(!sim.pendingGoals)sim.pendingGoals=Array(size).fill(null);
+ if(!sim.taskPlanning)sim.taskPlanning={suspended:0,resumed:0,invalidated:0,discarded:0,atomic:0,opportunistic:0,preflight:0};
  return sim.taskStacks;
 }
 export function interruptClass(action){if(ATOMIC.has(action))return'atomic';if(URGENT.has(action))return'urgent';if(RESUMABLE.has(action))return'resumable';return DISCARDABLE.has(action)?'discardable':'discardable'}
 export function stackFor(sim,i){ensureTaskPlanning(sim);return sim.taskStacks[i]||(sim.taskStacks[i]=[])}
 export function stackSummary(sim,i){return stackFor(sim,i).map(x=>({action:x.intent?.action,reason:x.reason,progress:x.progress,suspendedAt:x.suspendedAt,targetX:x.intent?.targetX,targetY:x.intent?.targetY}))}
+export function pendingGoal(sim,i){ensureTaskPlanning(sim);return sim.pendingGoals[i]||null}
+export function clearPendingGoal(sim,i,goal=null){ensureTaskPlanning(sim);if(goal==null||sim.pendingGoals[i]===goal)sim.pendingGoals[i]=null}
 
 export function performAtomicNeeds(sim,i){
  const n=sim.npcs;if(!n.alive[i])return false;
@@ -28,12 +31,22 @@ export function performAtomicNeeds(sim,i){
  return false;
 }
 export function performAtomicAction(sim,i,action){
- if(!ATOMIC.has(action))return false;ensureTaskPlanning(sim);const n=sim.npcs,w=sim.world,tech=technologyFor(sim);let ok=false;
+ if(!ATOMIC.has(action))return false;ensureTaskPlanning(sim);const n=sim.npcs;let ok=false;
  if(action===ACTION.DRINK){if((n.inventory[i][RESOURCE.WATER]||0)>.08){n.inventory[i][RESOURCE.WATER]-=.09;n.setNeed(i,1,n.need(i,1)-.72);waterExposure(sim,i);ok=true}}
  else if(action===ACTION.EAT){let food=null;for(const k of FOOD)if((n.inventory[i][k]||0)>.04){const amount=Math.min(.14,n.inventory[i][k]);n.inventory[i][k]-=amount;food={kind:k,amount,raw:k!==RESOURCE.PRESERVED};break}if(food){n.setNeed(i,0,n.need(i,0)-.58);if(food.kind===RESOURCE.BERRY)n.addNutrition(i,NUTRITION.PLANT,.2);else if(food.kind===RESOURCE.GRAIN)n.addNutrition(i,NUTRITION.GRAIN,.2);else if([RESOURCE.MEAT,RESOURCE.FISH,RESOURCE.EGG,RESOURCE.MILK].includes(food.kind))n.addNutrition(i,NUTRITION.PROTEIN,.22);else{n.addNutrition(i,NUTRITION.PROTEIN,.1);n.addNutrition(i,NUTRITION.PLANT,.08)}foodExposure(sim,i,food.kind,food.raw!==false);ok=true}}
  if(ok){sim.actionHistogram[action]=(sim.actionHistogram[action]||0)+1;sim.taskPlanning.atomic++;if(n.intent[i])sim.taskPlanning.opportunistic++;return true}return false;
 }
 function personalFood(n,i){let s=0;for(const k of FOOD)s+=n.inventory[i][k]||0;return s}
+
+export function preflightLongGoal(sim,i,goal){
+ ensureTaskPlanning(sim);if(!LONG_GOALS.has(goal))return null;const n=sim.npcs,water=n.inventory[i][RESOURCE.WATER]||0,food=personalFood(n,i);
+ if(n.need(i,0)>.4&&food>.04)performAtomicAction(sim,i,ACTION.EAT);
+ if(n.need(i,1)>.36&&water>.08)performAtomicAction(sim,i,ACTION.DRINK);
+ const waterAfter=n.inventory[i][RESOURCE.WATER]||0,foodAfter=personalFood(n,i),knownWater=knownResource(sim,i,RESOURCE.WATER),knownFood=knownResource(sim,i,RESOURCE.BERRY);
+ if(waterAfter<.16&&knownWater){sim.pendingGoals[i]=goal;sim.taskPlanning.preflight++;return ACTION.WATER}
+ if(foodAfter<.12&&knownFood){sim.pendingGoals[i]=goal;sim.taskPlanning.preflight++;return ACTION.FORAGE}
+ return null;
+}
 
 export function emergencyKind(sim,i,p={}){
  const n=sim.npcs,int=n.intent[i];if(!int||URGENT.has(int.action))return null;
@@ -71,5 +84,5 @@ export function shouldSwitchTask(sim,i,scores,goal,p={}){
 }
 export function switchTask(sim,i,goal,p={}){const n=sim.npcs;if(!n.intent[i])return false;const cls=interruptClass(n.intent[i].action);if(cls==='resumable')suspendCurrent(sim,i,'prioridade claramente superior');else discardCurrent(sim,i,'prioridade claramente superior');return true}
 
-export function serializeTaskPlanning(sim){ensureTaskPlanning(sim);return{stacks:sim.taskStacks.map(s=>s.map(x=>({...x,intent:cloneIntent(x.intent)}))),metrics:{...sim.taskPlanning}}}
-export function hydrateTaskPlanning(sim,data){sim.taskStacks=Array.from({length:sim.npcs?.alive?.length||512},(_,i)=>(data?.stacks?.[i]||[]).slice(-MAX_STACK).map(x=>({...x,intent:cloneIntent(x.intent)})));sim.taskPlanning={suspended:0,resumed:0,invalidated:0,discarded:0,atomic:0,opportunistic:0,...(data?.metrics||{})};return sim.taskStacks}
+export function serializeTaskPlanning(sim){ensureTaskPlanning(sim);return{stacks:sim.taskStacks.map(s=>s.map(x=>({...x,intent:cloneIntent(x.intent)}))),pendingGoals:sim.pendingGoals.slice(),metrics:{...sim.taskPlanning}}}
+export function hydrateTaskPlanning(sim,data){const size=sim.npcs?.alive?.length||512;sim.taskStacks=Array.from({length:size},(_,i)=>(data?.stacks?.[i]||[]).slice(-MAX_STACK).map(x=>({...x,intent:cloneIntent(x.intent)})));sim.pendingGoals=Array.from({length:size},(_,i)=>data?.pendingGoals?.[i]||null);sim.taskPlanning={suspended:0,resumed:0,invalidated:0,discarded:0,atomic:0,opportunistic:0,preflight:0,...(data?.metrics||{})};return sim.taskStacks}
