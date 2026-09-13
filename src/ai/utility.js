@@ -1,37 +1,31 @@
-import {NEED,GENE,RESOURCE,ACTION,BUILDING} from '../core/constants.js';
+import {NEED,GENE,RESOURCE,ACTION,BUILDING,TOOL} from '../core/constants.js';
+import {knownResource,knownDungeons} from './perception.js';
 const C=x=>Math.max(0,Math.min(1,x));
-function distCost(d){return 1/(1+d*.08)}
-function nearStore(w,n,i){return w.nearBuilding(n.x[i],n.y[i],BUILDING.STORAGE,4)}
-export function scoreActions(sim,i){
- const n=sim.npcs,g=(x)=>n.gene(i,x),need=(x)=>n.need(i,x),inv=n.inventory[i],w=sim.world,m=sim.memory;
- const nearest=(kind)=>w.nearestResource(n.x[i],n.y[i],kind),shelter=w.nearestBuilding(n.x[i],n.y[i],BUILDING.SHELTER),well=w.nearestBuilding(n.x[i],n.y[i],BUILDING.WELL);
- const food=nearest(RESOURCE.FOOD),river=nearest(RESOURCE.WATER),water=well&&(!river||well.d<river.d)?well:river,wood=nearest(RESOURCE.WOOD),stone=nearest(RESOURCE.STONE),iron=nearest(RESOURCE.IRON);
- const localThreat=w.threatAt(n.x[i],n.y[i]),hasForge=w.buildings.some(b=>b.type===BUILDING.FORGE),farm=w.buildings.find(b=>b.type===BUILDING.FARM),store=nearStore(w,n,i);
- const communityIron=w.stock[RESOURCE.IRON]<18?1:.18,socialTarget=sim.nearestNPC(i),rel=socialTarget>=0?m.relation(i,socialTarget):null;
- const carrying=[RESOURCE.WOOD,RESOURCE.STONE,RESOURCE.IRON,RESOURCE.WHEAT,RESOURCE.WATER,RESOURCE.FOOD].reduce((s,k)=>s+inv[k],0);
- const equipNeed=1-(n.tool[i]+n.weapon[i])*.5;
- const farmReady=farm?(farm.ripe>.04||farm.seedReady>.02||((farm.planted||0)<(farm.capacity||2.5)&&w.stock[RESOURCE.WHEAT]>.04)):false;
- const scores=[
-  [ACTION.EAT,Math.pow(need(NEED.HUNGER),3)*((inv[RESOURCE.FOOD]>.1||(store&&w.stock[RESOURCE.FOOD]>.12))?1:.04)],
-  [ACTION.DRINK,Math.pow(need(NEED.THIRST),3)*((inv[RESOURCE.WATER]>.08||(store&&w.stock[RESOURCE.WATER]>.1))?1:.04)],
-  [ACTION.SLEEP,Math.pow(need(NEED.SLEEP),3)*(w.nearBuilding(n.x[i],n.y[i],BUILDING.SHELTER)?1:.45)],
-  [ACTION.WARM,Math.pow(need(NEED.TEMP),3)*distCost(shelter?.d??20)*1.4],
-  [ACTION.FORAGE,Math.pow(need(NEED.HUNGER),2)*distCost(food?.d??20)*(.7+g(GENE.CURIOSITY)*.5)],
-  [ACTION.WATER,Math.pow(need(NEED.THIRST),2)*distCost(water?.d??20)*1.25],
-  [ACTION.DEPOSIT,carrying>.28?(.18+carrying*.45+(inv[RESOURCE.WATER]>.2?.32:0)+(inv[RESOURCE.FOOD]>.2?.2:0)):0],
-  [ACTION.WOOD,(.15+need(NEED.PURPOSE)*.35)*distCost(wood?.d??20)*(.5+n.skill(i,1))],
-  [ACTION.STONE,(w.stock[RESOURCE.STONE]<35?.2:.06)*(.6+need(NEED.PURPOSE)*.2)*distCost(stone?.d??20)*(.45+n.skill(i,0))],
-  [ACTION.IRON,communityIron*distCost(iron?.d??30)*(.3+n.skill(i,0))*(hasForge?1:.45)*m.dangerModifier(i,'caverna')],
-  [ACTION.FARM,farmReady?(w.stock[RESOURCE.FOOD]<55?.62:.16)*(.35+n.skill(i,2)):0],
-  [ACTION.CRAFT,hasForge&&w.stock[RESOURCE.IRON]>.25&&w.stock[RESOURCE.WOOD]>.1?(.16+equipNeed*.35+need(NEED.PURPOSE)*.18)*(.45+n.skill(i,7)):0],
-  [ACTION.SOCIAL,Math.pow(need(NEED.SOCIAL),2)*(.4+g(GENE.SOCIABILITY))*(rel?1+C(rel.affection+.5):.7)],
-  [ACTION.BUILD,(w.buildings.length<7?.4:.06)*(.45+n.skill(i,6))*(.5+g(GENE.AMBITION))],
-  [ACTION.EXPLORE,(.08+need(NEED.PURPOSE)*.25)*(.4+g(GENE.CURIOSITY))*(1-g(GENE.CAUTION)*.35)],
-  [ACTION.FIGHT,localThreat*(.35+g(GENE.AGGRESSION)*1.25)*(1-g(GENE.CAUTION)*.55)*(.65+n.skill(i,10)+n.weapon[i]*.35)],
-  [ACTION.FLEE,localThreat*(.45+g(GENE.CAUTION)*1.35)*(1-g(GENE.AGGRESSION)*.42)*(.65+need(NEED.SAFETY)*.7)],
-  [ACTION.DUNGEON,sim.dungeon.pressure*(.22+g(GENE.AMBITION)*.8+n.prestige[i]*.002)*(1-g(GENE.CAUTION)*.62)*sim.dungeon.readiness(sim,i)*(.45+n.skill(i,10)*.8)*(sim.dungeon.pressure>.2?1:.2)*m.dangerModifier(i,'dungeon')]
- ];
- const current=n.commitment[i]?.goal;if(current){const row=scores.find(x=>x[0]===current);if(row)row[1]*=1.3+g(GENE.STUBBORN)*.5}
- scores.sort((a,b)=>b[1]-a[1]);return scores;
-}
+const distCost=d=>1/(1+(d??30)*.055);
+function foodAvailable(w){return w.stock[RESOURCE.GRAIN]+w.stock[RESOURCE.BERRY]+w.stock[RESOURCE.MEAT]+w.stock[RESOURCE.FISH]+w.stock[RESOURCE.PRESERVED]+w.stock[RESOURCE.EGG]+w.stock[RESOURCE.MILK]}
+export function scoreActions(sim,i,perception){const n=sim.npcs,w=sim.world,m=sim.memory,g=x=>n.gene(i,x),need=x=>n.need(i,x),known=k=>knownResource(sim,i,k);const food=known(RESOURCE.BERRY),water=known(RESOURCE.WATER),wood=known(RESOURCE.LOG),stone=known(RESOURCE.STONE),iron=known(RESOURCE.IRON),fish=known(RESOURCE.FISH);const localShelter=w.nearestBuildingLocal(n.x[i],n.y[i],BUILDING.SHELTER,12),localFarm=w.nearestBuildingLocal(n.x[i],n.y[i],BUILDING.FARM,12),localForge=w.nearestBuildingLocal(n.x[i],n.y[i],BUILDING.FORGE,12),dungeons=knownDungeons(sim,i);const socialTarget=sim.nearestVisibleNPC(i,perception.radius),rel=socialTarget>=0?m.relation(i,socialTarget):null;const spatial=m.spatial.get(i),coverage=spatial?spatial.count/spatial.capacity:0;const stockFood=foodAvailable(w),woodDemand=C((28-w.stock[RESOURCE.LOG])/28),stoneDemand=C((18-w.stock[RESOURCE.STONE])/18),ironDemand=C((12-w.stock[RESOURCE.IRON])/12);const wounded=sim.nearestWounded(i,perception.radius);const prey=sim.animals?.nearestPrey(n.x[i],n.y[i],perception.radius);const dangerBelief=m.dangerModifier(i,'dungeon');const hasHammer=n.tool[i]===TOOL.HAMMER||w.tools[TOOL.HAMMER]>0;const homeDist=Math.hypot(n.x[i]-w.settlement.x,n.y[i]-w.settlement.y),night=sim.meta().phase==='noite'||sim.meta().phase==='madrugada',scoutDrive=dungeons.length===0&&g(GENE.CURIOSITY)>.68?.55+(g(GENE.CURIOSITY)-.68)*1.4:0;const scores=[
+ [ACTION.EAT,Math.pow(need(NEED.HUNGER),3)*(stockFood>.08?1:.03)],
+ [ACTION.DRINK,Math.pow(need(NEED.THIRST),3)*((w.stock[RESOURCE.WATER]>.08||water)?1:.02)],
+ [ACTION.SLEEP,Math.pow(need(NEED.SLEEP),3)*(localShelter?1:.5)],
+ [ACTION.WARM,Math.pow(need(NEED.TEMP),3)*(w.nearestBuildingLocal(n.x[i],n.y[i],BUILDING.CAMPFIRE,12)||localShelter?1:.35)],
+ [ACTION.RETURN,(homeDist>9?((night?.82:.08)+Math.max(0,homeDist-18)*.035+need(NEED.SAFETY)*.18):0)*(1-g(GENE.CURIOSITY)*.18)],
+ [ACTION.FLEE,perception.threat*(.35+g(GENE.CAUTION)*1.35)*(1-g(GENE.AGGRESSION)*.45)+need(NEED.SAFETY)*.45],
+ [ACTION.FIGHT,perception.threat*(.28+g(GENE.AGGRESSION)*1.28)*(1-g(GENE.CAUTION)*.62)*(.55+n.skill(i,10))],
+ [ACTION.FORAGE,(need(NEED.HUNGER)*.45+(.35* (stockFood<8)))*distCost(food?.d)*(food?.confidence??0)],
+ [ACTION.WATER,(need(NEED.THIRST)*.58+(.42*(w.stock[RESOURCE.WATER]<10)))*distCost(water?.d)*(water?.confidence??0)],
+ [ACTION.WOOD,(.12+woodDemand*.76)*distCost(wood?.d)*(wood?.confidence??0)*(.5+n.skill(i,1))],
+ [ACTION.STONE,(.08+stoneDemand*.48)*distCost(stone?.d)*(stone?.confidence??0)*(.45+n.skill(i,0))],
+ [ACTION.IRON,(.05+ironDemand*.42)*distCost(iron?.d)*(iron?.confidence??0)*(.35+n.skill(i,0))*m.dangerModifier(i,'mineração')],
+ [ACTION.FARM,(localFarm?(.18+(stockFood<18?.6:.08))*(.5+n.skill(i,2)):0)],
+ [ACTION.FISH,fish?(.12+(stockFood<16?.35:.04))*distCost(fish.d)*(.45+n.skill(i,4)):0],
+ [ACTION.HUNT,prey?(.09+(stockFood<12?.4:.05))*(.4+n.skill(i,3))*(1-g(GENE.CAUTION)*.2):0],
+ [ACTION.COOK,(w.stock[RESOURCE.MEAT]+w.stock[RESOURCE.FISH]>.5?.34:0)*(.5+n.skill(i,5))],
+ [ACTION.TAILOR,(w.stock[RESOURCE.LEATHER]+w.stock[RESOURCE.WOOL]>.7&&n.armor[i]===0?.22:0)*(.45+n.skill(i,9))],
+ [ACTION.FORGE,(localForge&&w.stock[RESOURCE.IRON]>.8?.2+ironDemand*.15:0)*(.45+n.skill(i,7))],
+ [ACTION.CARE,wounded>=0?(.18+n.gene(i,GENE.EMPATHY)*.35+n.skill(i,12)*.3):0],
+ [ACTION.SOCIAL,Math.pow(need(NEED.SOCIAL),2)*(.35+g(GENE.SOCIABILITY))*(rel?1+C(rel.affection+.4):.65)],
+ [ACTION.BUILD,(w.blueprints.some(b=>!b.done)?.58:(!w.buildings.some(b=>b.type===BUILDING.FARM)?.66:(w.buildings.length<10?.22:.04)))*(.45+n.skill(i,6))*(.5+g(GENE.AMBITION))*(hasHammer?1:.25)],
+ [ACTION.EXPLORE,(.04+(1-coverage)*.25+scoutDrive+need(NEED.PURPOSE)*.12)*(.18+g(GENE.CURIOSITY)*g(GENE.CURIOSITY)*.9)*(1-g(GENE.CAUTION)*.3)*(1-need(NEED.HUNGER)*.7)*(1-need(NEED.THIRST)*.7)*(homeDist<24?1:.2)],
+ [ACTION.DUNGEON,dungeons.length&&need(NEED.HUNGER)<.48&&need(NEED.THIRST)<.48&&n.stamina[i]>.42?(.16+g(GENE.AMBITION)*.68+n.prestige[i]*.0015)*(1-g(GENE.CAUTION)*.58)*(.38+n.skill(i,10))*(.42+sim.dungeon.pressureForKnown(sim,i)*.75)*dangerBelief:0]
+ ];scores.sort((a,b)=>b[1]-a[1]);return scores}
 export function chooseAction(sim,i,scores){const top=scores.slice(0,3);const picked=sim.rng.weighted(top,x=>Math.pow(Math.max(.0001,x[1]),2));return picked?.[0]||ACTION.IDLE}

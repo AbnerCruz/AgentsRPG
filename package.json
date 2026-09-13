@@ -1,1 +1,1 @@
-{"name":"agentsrpg-aquarium","private":true,"type":"module","scripts":{"test":"node tests/smoke.mjs","diagnose":"node tests/multi-seed.mjs","long":"node tests/long-run.mjs","travel":"node tests/travel-tracker.mjs"}}
+{"name":"agentsrpg-aquarium-v3","private":true,"type":"module","scripts":{"test":"node tests/smoke.mjs","test:world":"node tests/world-gen.mjs","test:multi":"node tests/multi-seed.mjs","test:travel":"node tests/travel-tracker.mjs","test:perception":"node tests/perception.mjs","test:long":"node tests/long-run.mjs"}}

@@ -1,0 +1,4 @@
+import assert from 'node:assert/strict';
+import {Simulation} from '../src/simulation.js';
+import {BIOME,TILE_TYPE} from '../src/core/constants.js';
+const prints=new Set();for(let seed=1;seed<=10;seed++){const s=new Simulation(seed*9973),w=s.world;const biomes=new Set(w.biomes);assert.ok(biomes.size>=5,`seed ${seed}: poucos biomas`);assert.equal(w.dungeons.length,6);let water=99;for(let y=0;y<80;y++)for(let x=0;x<80;x++)if(w.tile(x,y)===TILE_TYPE.WATER)water=Math.min(water,Math.hypot(x-w.settlement.x,y-w.settlement.y));assert.ok(water<14,`seed ${seed}: assentamento longe demais da água`);const fp=[...w.biomes.slice(0,120)].join(',')+`:${Math.round(w.settlement.x)},${Math.round(w.settlement.y)}`;prints.add(fp)}assert.ok(prints.size>=8,'seeds devem gerar mundos materialmente diferentes');console.log(`OK world-gen: ${prints.size}/10 fingerprints únicos`);
