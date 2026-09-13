@@ -1,6 +1,7 @@
 import {World} from '../world/world.js';
 import {BUILDING} from '../core/constants.js';
 import {ensureConstruction} from './construction.js';
+import './reality-reconciliation.js';
 
 // A physical shell becomes useful as soon as floor/walls/door/roof are complete.
 // Furniture and work fixtures remain optional follow-up tasks and never block shelter.
