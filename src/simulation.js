@@ -1,5 +1,5 @@
 import {RNG} from './core/rng.js';
-import {VERSION,DAY_TICKS,BUILDING,GENE,RESOURCE,ACTION,NPC_STATE,MAX_NPCS,TILE_TYPE,MAP_W,MAP_H} from './core/constants.js';
+import {VERSION,DAY_TICKS,BUILDING,GENE,RESOURCE,ACTION,NPC_STATE,MAX_NPCS,TILE_TYPE,MAP_W,MAP_H,TRAVEL_ACTIONS} from './core/constants.js';
 import {dayOf,dayPhase,season,isNight} from './core/clock.js';
 import {World} from './world/world.js';
 import {serializeWorldCompact,hydrateWorldCompact} from './world/persistence.js';
@@ -20,7 +20,7 @@ import {TechnologySystem,technologyFor} from './systems/technology.js';
 import {SensorySystem} from './systems/senses.js';
 import {diseaseTick} from './systems/disease.js';
 
-const REVIEW_TICKS=120,NEAR_RADIUS=18,MEDIUM_RADIUS=NEAR_RADIUS*3;
+const REVIEW_TICKS=120,TRAVEL_REVIEW_TICKS=480,NEAR_RADIUS=18,MEDIUM_RADIUS=NEAR_RADIUS*3;
 
 export class Simulation{
  constructor(seed=1,generated=null){
@@ -42,11 +42,11 @@ export class Simulation{
  step(){
   this.tick++;const n=this.npcs;n.beginFrame();this.world.pathfinder.beginTick?.(3);this.world.tick(this.tick);this.senses.tick(this.tick);this.dungeon.tick(this);this.animals.step(this);this.handleMonsters();diseaseTick(this);
   for(const i of n.living()){
-   let p=this.lastPerception[i];const shouldSense=!p||n.state[i]===NPC_STATE.IDLE||this.tick%4===i%4;if(shouldSense)p=this.lastPerception[i]=perceive(this,i);updateNeeds(this,i,p?.threat||0);
+   const lod=this.executionLOD(i),senseEvery=lod===0?4:lod===1?8:16;let p=this.lastPerception[i];const shouldSense=!p||this.tick%senseEvery===i%senseEvery;if(shouldSense)p=this.lastPerception[i]=perceive(this,i);updateNeeds(this,i,p?.threat||0);
    if(n.age[i]<16){this.childStep(i);continue}
    const hadTask=!!n.intent[i];let deferDecision=false;
    if(n.intent[i]&&this.shouldInterrupt(i,p)){abortIntent(this,i,'emergência imediata');deferDecision=true}
-   if(n.intent[i]&&this.tick-(n.intent[i].lastReview??n.intent[i].started)>=REVIEW_TICKS)this.reviewTask(i,p);
+   if(n.intent[i]){const reviewEvery=TRAVEL_ACTIONS.has(n.intent[i].action)?TRAVEL_REVIEW_TICKS:REVIEW_TICKS;if(this.tick-(n.intent[i].lastReview??n.intent[i].started)>=reviewEvery)this.reviewTask(i,p)}
    if(n.intent[i]){this.executeCurrentTask(i);if(hadTask&&!n.intent[i])deferDecision=true}
    if(!n.intent[i]&&!deferDecision)this.decide(i,p);
    if(this.tick%(DAY_TICKS*2)===i%(DAY_TICKS*2))this.memory.reflect(i,this.tick);
