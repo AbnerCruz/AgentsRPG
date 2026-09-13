@@ -3,7 +3,8 @@ import {Simulation} from '../src/simulation.js';
 import {BUILDING,RESOURCE,BIOME} from '../src/core/constants.js';
 import {ensureConstruction,PIECE,MATERIAL,roomAt,placementPreservesAccess,territoryAt,constructionStats,canAccessChest,groupForNpc} from '../src/systems/construction.js';
 
-function completeBlueprint(sim,bp){assert.ok(bp,'blueprint precisa existir');let built=null;for(const p of bp.pieces){const x=sim.world.completePiece(bp,p);if(x)built=x}return built}
+function evacuateSite(sim,bp){for(const j of sim.npcs.living()){sim.npcs.x[j]=bp.cx+10+(j%3);sim.npcs.y[j]=bp.cy+10+((j/3)|0)%3}}
+function completeBlueprint(sim,bp){assert.ok(bp,'blueprint precisa existir');evacuateSite(sim,bp);let built=null;for(const p of bp.pieces){const x=sim.world.completePiece(bp,p);if(x)built=x}return built}
 function addRawPiece(w,type,x,y,layer='ground',opts={}){const id=w.nextPieceId++,p={id,type,x,y,layer,ownerUid:opts.ownerUid??-1,group:opts.group??0,material:opts.material??RESOURCE.LOG,materialStyle:opts.materialStyle??MATERIAL.WOOD,durability:1,maxDurability:1,open:opts.open??false,burning:false,builtTick:0};w.pieceStore[id]=p;if(layer==='ground')w.structure[w.idx(x,y)]=id;return p}
 
 const sim=new Simulation(9090),w=ensureConstruction(sim),n=sim.npcs,i=n.living()[0];
@@ -12,7 +13,8 @@ assert.ok(w.structure instanceof Uint16Array&&w.structureOwner instanceof Int16A
 // Projeto vira peças reais e o progresso mora no alvo compartilhado.
 sim.technology.setKnown(n,i,1,-1,sim.tick);n.inventory[i][RESOURCE.LOG]=20;n.inventory[i][RESOURCE.STONE]=5;
 const bp=w.createBlueprint(BUILDING.SHELTER,n.x[i],n.y[i],n.uid[i]);assert.ok(bp&&bp.pieces.length>20,'abrigo precisa ser projeto de várias peças');bp.pieces[0].progress=.47;assert.equal(w.nextBlueprintPiece(n.uid[i])?.bp.id,bp.id,'obra existente deve ser fonte de tarefas');assert.equal(bp.pieces[0].progress,.47,'progresso precisa permanecer na peça, não no trabalhador');
-const built=completeBlueprint(sim,bp);assert.ok(built?.finished,'casca concluída precisa produzir estrutura funcional');assert.ok(w.pieceStore.filter(Boolean).length>=20,'peças concluídas precisam entrar no store');
+// O canteiro sintético é evacuado; emparedamento é testado separadamente abaixo.
+evacuateSite(sim,bp);let built=null;for(const p of bp.pieces.filter(x=>x.layer!=='fixture')){const x=w.completePiece(bp,p);if(x)built=x}assert.ok(built?.finished,'casca concluída precisa produzir estrutura funcional');assert.equal(bp.done,false,'móvel avançado não pode bloquear o abrigo físico nem ser confundido com a casca');for(const p of bp.pieces.filter(x=>x.layer==='fixture'))w.completePiece(bp,p);assert.ok(w.pieceStore.filter(Boolean).length>=20,'peças concluídas precisam entrar no store');
 
 // Cômodo fechado: porta fechada fecha, porta aberta ou buraco abrem.
 let room=roomAt(w,bp.cx,bp.cy);assert.ok(room&&room.coverage>.5,'paredes + cobertura precisam formar cômodo');const door=w.pieceStore.find(p=>p?.type===PIECE.DOOR&&Math.hypot(p.x-bp.cx,p.y-bp.cy)<4);assert.ok(door,'projeto precisa ter porta');door.open=true;w.invalidateStructureRegion(door.x,door.y);assert.equal(roomAt(w,bp.cx,bp.cy),null,'porta aberta deve abrir o cômodo');door.open=false;w.invalidateStructureRegion(door.x,door.y);assert.ok(roomAt(w,bp.cx,bp.cy),'fechar a porta deve restaurar o cômodo');const wall=w.pieceStore.find(p=>p?.type===PIECE.WALL&&Math.hypot(p.x-bp.cx,p.y-bp.cy)<4);w.structure[w.idx(wall.x,wall.y)]=0;wall.durability=0;w.invalidateStructureRegion(wall.x,wall.y);assert.equal(roomAt(w,bp.cx,bp.cy),null,'buraco de um tile deve abrir o cômodo');
