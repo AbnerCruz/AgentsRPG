@@ -1,0 +1,46 @@
+name: Phase D Calibration
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  seed:
+    if: github.head_ref == 'phase-d-work'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        seed: [42, 7919, 1337, 2026, 77, 909, 31415, 8888, 1201, 6543]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Simulate 30 days
+        run: node tools/calibrate.mjs --seed=${{ matrix.seed }} --days=30 --sample=5 --out=calibration-${{ matrix.seed }}.json > /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calibration-${{ matrix.seed }}
+          path: calibration-${{ matrix.seed }}.json
+
+  aggregate:
+    if: github.head_ref == 'phase-d-work'
+    needs: seed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: calibration-*
+          path: calibration-results
+      - name: Aggregate baseline
+        run: node tools/aggregate-calibration.mjs calibration-results phase-d-baseline.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase-d-baseline
+          path: phase-d-baseline.json
