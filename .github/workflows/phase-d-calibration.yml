@@ -6,7 +6,7 @@ on:
 
 jobs:
   seed:
-    if: github.head_ref == 'phase-d-work'
+    if: github.head_ref == 'phase-d-work' || github.head_ref == 'recalibration-work'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -26,7 +26,7 @@ jobs:
           path: calibration-${{ matrix.seed }}.json
 
   aggregate:
-    if: github.head_ref == 'phase-d-work'
+    if: github.head_ref == 'phase-d-work' || github.head_ref == 'recalibration-work'
     needs: seed
     runs-on: ubuntu-latest
     steps:
