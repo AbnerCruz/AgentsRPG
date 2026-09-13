@@ -2,6 +2,7 @@ import {World} from '../world/world.js';
 import {MAP_W,MAP_H,RESOURCE,BIOME,WATER_KIND,TILE_TYPE} from '../core/constants.js';
 import {noiseHash} from '../core/rng.js';
 import './resource-ecology.js';
+import './reality-reconciliation.js';
 
 if(!World.prototype.__civilizationUnlockInstalled){
  // Mantém água como critério dominante, mas volta a considerar pedra já existente
