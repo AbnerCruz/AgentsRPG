@@ -3,6 +3,7 @@ import {knownResource,knownDungeons} from './perception.js';
 import {perceivedNeed} from '../systems/senses.js';
 import {technologyFor,TECH} from '../systems/technology.js';
 import {constructionNeedScore,territoryAccessFactor} from '../systems/construction.js';
+import {isActionSuppressed} from '../systems/failure-guard.js';
 const C=x=>Math.max(0,Math.min(1,x)),distCost=d=>1/(1+(d??30)*.055),foodKinds=[RESOURCE.GRAIN,RESOURCE.BERRY,RESOURCE.MEAT,RESOURCE.FISH,RESOURCE.PRESERVED,RESOURCE.EGG,RESOURCE.MILK],locatable=new Set([RESOURCE.LOG,RESOURCE.STONE,RESOURCE.IRON,RESOURCE.BERRY,RESOURCE.WATER,RESOURCE.CLAY,RESOURCE.SALT]);
 function personalFood(n,i){let s=0;for(const k of foodKinds)s+=n.inventory[i][k];return s}
 function visibleBuilding(p,type){return(p.buildings||[]).find(b=>b.type===type)||null}
@@ -46,7 +47,7 @@ export function scoreActions(sim,i,perception={}){
   [ACTION.DUNGEON,dungeons.length&&ownWater>.2&&ownFood>.2&&need(NEED.HUNGER)<.48&&need(NEED.THIRST)<.48&&n.stamina[i]>.42?(.1+g(GENE.AMBITION)*.5+n.prestige[i]*.001)*(1-g(GENE.CAUTION)*.58)*(.38+n.skill(i,10))*m.dangerModifier(i,'dungeon'):0]
  ];
  if(night)for(const row of scores)if([ACTION.WOOD,ACTION.STONE,ACTION.IRON,ACTION.FARM,ACTION.FISH,ACTION.HUNT,ACTION.BUILD,ACTION.FORGE,ACTION.TAILOR].includes(row[0]))row[1]*=.48;
- for(const row of scores)row[1]*=agendaBias(sim,row[0]);
+ for(const row of scores){row[1]*=agendaBias(sim,row[0]);if(isActionSuppressed(sim,i,row[0]))row[1]=0}
  const available=scores.filter(row=>row[0]===ACTION.HUNT||row[0]===ACTION.FISH||tech.canAction(i,row[0],sim));available.sort((a,b)=>b[1]-a[1]);return available;
 }
 export function chooseAction(sim,i,scores){const top=scores.filter(x=>x[1]>0).slice(0,3);if(!top.length)return ACTION.IDLE;const picked=sim.rng.weighted(top,x=>Math.pow(Math.max(.0001,x[1]),2));return picked?.[0]||ACTION.IDLE}
