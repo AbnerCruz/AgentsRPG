@@ -1,4 +1,5 @@
 import {ACTION,GENE,RESOURCE,TECH_COUNT,TOOL,TILE_TYPE,BIOME} from '../core/constants.js';
+import {BALANCE} from '../calibration/balance.js';
 
 export const TECH=[
  {id:0,key:'knap',name:'Lascar pedra',pre:[],mat:[RESOURCE.STONE]},
@@ -80,13 +81,13 @@ export class TechnologySystem{
  progress(n,i,t,amount,sourceUid=-1,tick=0){if(this.knows(n,i,t)||!this.prerequisites(n,i,t))return false;const p=i*TECH_COUNT+t;n.techProgress[p]=Math.min(255,n.techProgress[p]+Math.max(1,amount|0));if(sourceUid>=0)n.techSource[p]=sourceUid;if(n.techProgress[p]>=255)return this.setKnown(n,i,t,n.techSource[p],tick);return false}
  experiment(sim,i){
   this.attach(sim);const n=sim.npcs,uid=n.uid[i];if(!uid||n.age[i]<12||n.need(i,0)>.84||n.need(i,1)>.84)return null;
-  const last=this.lastAttemptByUid.get(uid)??-9999;if(sim.tick-last<40)return null;this.lastAttemptByUid.set(uid,sim.tick);
+  const last=this.lastAttemptByUid.get(uid)??-9999;if(sim.tick-last<BALANCE.experimentInterval)return null;this.lastAttemptByUid.set(uid,sim.tick);
   const candidates=[];for(let t=0;t<TECH_COUNT;t++)if(!this.knows(n,i,t)&&this.prerequisites(n,i,t)&&this.availableMaterial(sim,i,t))candidates.push(t);if(!candidates.length){this.focusByUid.delete(uid);return null}
   let t=this.focusByUid.get(uid);if(!candidates.includes(t)){t=sim.rng.weighted(candidates,x=>1+(n.techProgress[i*TECH_COUNT+x]||0)/80+(x<3?.35:0));this.focusByUid.set(uid,t)}
   const creativity=n.gene(i,GENE.CREATIVITY),curiosity=n.gene(i,GENE.CURIOSITY),stubborn=n.gene(i,GENE.STUBBORN),frustration=Math.min(1,(n.need(i,6)||0)+.15),p=n.techProgress[i*TECH_COUNT+t]||0;
-  const chance=.03*(.25+creativity*.75)*(.35+curiosity*.65)*(.55+frustration*.45)*(1+p/255*.3)*(1+stubborn*.18);
+  const chance=.03*BALANCE.experimentChanceMult*(.25+creativity*.75)*(.35+curiosity*.65)*(.55+frustration*.45)*(1+p/255*.3)*(1+stubborn*.18);
   if(!sim.rng.chance(chance))return{tech:t,learned:false,progress:p};
-  const gain=62+Math.round((creativity+curiosity)*32+sim.rng.range(0,28)),learned=this.progress(n,i,t,gain,-1,sim.tick);
+  const gain=(62+Math.round((creativity+curiosity)*32+sim.rng.range(0,28)))*BALANCE.experimentGainMult,learned=this.progress(n,i,t,gain,-1,sim.tick);
   if(learned){this.focusByUid.delete(uid);this.onDiscovery(sim,i,t,'experimentação')}
   return{tech:t,learned,progress:n.techProgress[i*TECH_COUNT+t]};
  }
