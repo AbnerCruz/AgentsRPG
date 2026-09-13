@@ -5,6 +5,7 @@ import {technologyFor} from '../systems/technology.js';
 const C=x=>Math.max(0,Math.min(1,x)),distCost=d=>1/(1+(d??30)*.055),foodKinds=[RESOURCE.GRAIN,RESOURCE.BERRY,RESOURCE.MEAT,RESOURCE.FISH,RESOURCE.PRESERVED,RESOURCE.EGG,RESOURCE.MILK];
 function personalFood(n,i){let s=0;for(const k of foodKinds)s+=n.inventory[i][k];return s}
 function visibleBuilding(p,type){return(p.buildings||[]).find(b=>b.type===type)||null}
+function personalShelter(sim,i){const n=sim.npcs;return sim.world.buildings.find(b=>b.finished&&b.type===BUILDING.SHELTER&&b.owner===n.uid[i])||null}
 function teachable(tech,n,a,b){let c=0;for(let t=0;t<TECH_COUNT;t++)if(tech.knows(n,a,t)&&!tech.knows(n,b,t)&&tech.prerequisites(n,b,t))c++;return c}
 function localGroup(perception,i){const ids=[i];for(const h of perception.humans||[])if(h.d<=9&&!ids.includes(h.id))ids.push(h.id);return ids}
 function localQty(n,ids,kind){let s=0;for(const i of ids)s+=n.inventory[i]?.[kind]||0;return s}
@@ -12,15 +13,15 @@ function specialization(n,i,ids,profession){if(!profession)return 1;if(n.prof[i]
 export function scoreActions(sim,i,perception={}){
  const n=sim.npcs,m=sim.memory,g=x=>n.gene(i,x),need=x=>perceivedNeed(sim,i,x),known=k=>knownResource(sim,i,k),inv=n.inventory[i],tech=technologyFor(sim);
  const food=known(RESOURCE.BERRY),water=known(RESOURCE.WATER),wood=known(RESOURCE.LOG),stone=known(RESOURCE.STONE),iron=known(RESOURCE.IRON),fish=known(RESOURCE.FISH),dungeons=knownDungeons(sim,i);
- const shelter=visibleBuilding(perception,BUILDING.SHELTER),fire=visibleBuilding(perception,BUILDING.CAMPFIRE),farm=visibleBuilding(perception,BUILDING.FARM),forge=visibleBuilding(perception,BUILDING.FORGE),human=perception.humans?.[0],rel=human?m.relation(i,human.id):null,wounded=perception.wounded?.[0],prey=perception.prey?.[0];
- const ids=localGroup(perception,i),groupSize=Math.max(1,ids.length),ownFood=personalFood(n,i),ownWater=inv[RESOURCE.WATER],woodDemand=C((5*groupSize-localQty(n,ids,RESOURCE.LOG))/(5*groupSize)),stoneDemand=C((2*groupSize-localQty(n,ids,RESOURCE.STONE))/(2*groupSize)),ironDemand=C((1.5*groupSize-localQty(n,ids,RESOURCE.IRON))/(1.5*groupSize)),coverage=m.coverageRatio(i),night=sim.meta().phase==='noite'||sim.meta().phase==='madrugada',homeDist=Math.hypot(n.x[i]-n.homeX[i],n.y[i]-n.homeY[i]),injury=(n.wound[i]||0)+(n.pain?.[i]||0),ignorance=(need(NEED.HUNGER)>.45&&!food?.4:0)+(need(NEED.THIRST)>.42&&!water?.55:0)+(woodDemand>.6&&!wood?.18:0)+(stoneDemand>.6&&!stone?.15:0),teacherTarget=human?teachable(tech,n,i,human.id):0;
+ const shelter=visibleBuilding(perception,BUILDING.SHELTER),homeShelter=personalShelter(sim,i),fire=visibleBuilding(perception,BUILDING.CAMPFIRE),farm=visibleBuilding(perception,BUILDING.FARM),forge=visibleBuilding(perception,BUILDING.FORGE),human=perception.humans?.[0],rel=human?m.relation(i,human.id):null,wounded=perception.wounded?.[0],prey=perception.prey?.[0];
+ const ids=localGroup(perception,i),groupSize=Math.max(1,ids.length),ownFood=personalFood(n,i),ownWater=inv[RESOURCE.WATER],woodDemand=C((5*groupSize-localQty(n,ids,RESOURCE.LOG))/(5*groupSize)),stoneDemand=C((2*groupSize-localQty(n,ids,RESOURCE.STONE))/(2*groupSize)),ironDemand=C((1.5*groupSize-localQty(n,ids,RESOURCE.IRON))/(1.5*groupSize)),coverage=m.coverageRatio(i),night=sim.meta().phase==='noite'||sim.meta().phase==='madrugada',homeDist=homeShelter?Math.hypot(n.x[i]-homeShelter.x,n.y[i]-homeShelter.y):0,injury=(n.wound[i]||0)+(n.pain?.[i]||0),ignorance=(need(NEED.HUNGER)>.45&&!food?.4:0)+(need(NEED.THIRST)>.42&&!water?.55:0)+(woodDemand>.6&&!wood?.18:0)+(stoneDemand>.6&&!stone?.15:0),teacherTarget=human?teachable(tech,n,i,human.id):0;
  const spec=p=>specialization(n,i,ids,p);
  const scores=[
   [ACTION.EAT,Math.pow(need(NEED.HUNGER),3)*(ownFood>.06?1:.02)],
   [ACTION.DRINK,Math.pow(need(NEED.THIRST),3)*((ownWater>.06||water)?1:.02)],
   [ACTION.SLEEP,Math.pow(need(NEED.SLEEP),3)*(shelter?1:.5)],
   [ACTION.WARM,(fire||shelter)?Math.pow(need(NEED.TEMP),3):0],
-  [ACTION.RETURN,homeDist>12?(.05+Math.min(.65,(homeDist-12)*.025))*(night?1.8:1):0],
+  [ACTION.RETURN,homeShelter&&homeDist>12?(.05+Math.min(.65,(homeDist-12)*.025))*(night?1.8:1):0],
   [ACTION.FLEE,(perception.threat||0)*(.35+g(GENE.CAUTION)*1.35)*(1-g(GENE.AGGRESSION)*.45)+need(NEED.SAFETY)*.45],
   [ACTION.FIGHT,(perception.threat||0)*(.28+g(GENE.AGGRESSION)*1.28)*(1-g(GENE.CAUTION)*.62)*(.55+n.skill(i,10))*spec(5)],
   [ACTION.FORAGE,(need(NEED.HUNGER)*.62+(ownFood<.35?.42:.04))*distCost(food?.d)*(food?.confidence??0)],
