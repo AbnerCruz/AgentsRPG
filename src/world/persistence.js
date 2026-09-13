@@ -1,3 +1,4 @@
+import {RNG} from '../core/rng.js';
 import {World} from './world.js';
 
 const EPS=1e-5;
@@ -17,7 +18,10 @@ export function serializeWorldCompact(world){
 }
 
 export function hydrateWorldCompact(data,rng,seed=1){
- const world=World.hydrate(data||{},rng,seed);
+ const worldSeed=(data?.seed??seed)>>>0;
+ // The compact save stores only seed + dynamic deltas. Reconstruct the deterministic
+ // base with its own seed-owned RNG; never consume or depend on the live simulation RNG.
+ const world=World.hydrate(data||{},new RNG(worldSeed),worldSeed);
  if(!data?.resources&&Array.isArray(data?.resourceDeltas)){
   for(const row of data.resourceDeltas){
    const [id,amount,durability,workProgress]=row||[],r=world.resources[id];
