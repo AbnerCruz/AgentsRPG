@@ -40,5 +40,5 @@ function ensurePebbles(w,seed){
  }
  if(!best)return;
  const amount=.7+noiseHash(best.x,best.y,w.seed+5202)*1.1;
- w.addResource(RESOURCE.STONE,best.x+.5,best.y+.5,amount,0,1.2).pebble=true;
+ const pebble=w.addResource(RESOURCE.STONE,best.x+.5,best.y+.5,amount,0,1.2);pebble.pebble=true;pebble.regenDays=0;
 }
