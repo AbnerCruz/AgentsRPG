@@ -1,6 +1,6 @@
 import {MemorySystem} from '../ai/memory.js';
 import {World} from '../world/world.js';
-import {ACTION,RESOURCE,MAP_W} from '../core/constants.js';
+import {ACTION,RESOURCE,MAP_W,NEED} from '../core/constants.js';
 
 const TARGET_COOLDOWN=2400,ACTION_COOLDOWN=3000,FAILURE_LIMIT=3,STREAK_WINDOW=6000;
 const KIND_ACTION={
@@ -18,6 +18,7 @@ export function isTargetCooling(sim,i,action,x,y){if(!sim.world.inside(x,y))retu
 export function recordTaskOutcome(sim,i,int,success,reason=null){
  if(!int?.action)return;const memory=sim.memory,actions=npcActions(memory,i),prev=actions[int.action]||{count:0,last:0,until:0};
  if(success){actions[int.action]={count:0,last:sim.tick,until:0};return}
+ sim.npcs.setNeed(i,NEED.PURPOSE,sim.npcs.need(i,NEED.PURPOSE)+.035);
  const tile=tileFor(sim.world,int);if(tile>=0)npcTargets(memory,i)[`${int.action}:${tile}`]=sim.tick+TARGET_COOLDOWN;
  if(sim.tick-prev.last>STREAK_WINDOW)prev.count=0;prev.count++;prev.last=sim.tick;
  if(prev.count>=FAILURE_LIMIT){prev.count=0;prev.until=sim.tick+ACTION_COOLDOWN;memory.remember(i,{type:'frustração',text:`Falhei repetidamente em ${int.action}; vou tentar outra coisa por um tempo.`,tick:sim.tick,valence:-2,importance:.5,reflectionKey:`falha:${int.action}`})}
