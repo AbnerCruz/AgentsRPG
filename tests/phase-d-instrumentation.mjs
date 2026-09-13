@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {runHeadless,snapshotMetrics} from '../src/calibration/headless.js';
 import {Simulation} from '../src/simulation.js';
+import {ACTION} from '../src/core/constants.js';
 
 const a=runHeadless({seed:42,ticks:160,sampleEveryDays:.05});
 const b=runHeadless({seed:42,ticks:160,sampleEveryDays:.05});
@@ -9,10 +10,14 @@ assert.equal(a.final.techniquesDistinct,b.final.techniquesDistinct,'mesma seed d
 assert.deepEqual(a.actionHistogram,b.actionHistogram,'mesma seed deve preservar histograma de ações');
 assert.ok(Array.isArray(a.series)&&a.series.length>0,'runner deve produzir série temporal');
 assert.ok(a.final.saveBytes>0,'runner deve medir tamanho do save');
+assert.ok(a.saveSections&&a.saveSections.npcs>0&&a.saveSections.memory>0,'runner deve medir save por subsistema');
 assert.equal(typeof a.final.groups,'number');
 assert.equal(typeof a.final.techDivergence,'number');
 assert.equal(typeof a.final.meanTemperamentVariance,'number');
 assert.equal(typeof a.final.travelCompletion,'number');
 assert.equal(typeof a.final.diseaseIncidence,'number');
-const sim=new Simulation(77);const snap=snapshotMetrics(sim);assert.equal(snap.population,100);assert.equal(snap.day,0);
-console.log('OK Phase D instrumentation: séries, ações, grupos, genética, técnica, doença, save e determinismo');
+assert.equal(typeof a.final.crossGroupEncountered,'number');
+assert.ok(a.final.firstCrossGroupContactDay===null||Number.isFinite(a.final.firstCrossGroupContactDay));
+assert.ok(a.final.firstCrossGroupTransferDay===null||Number.isFinite(a.final.firstCrossGroupTransferDay));
+const sim=new Simulation(77);const snap=snapshotMetrics(sim);assert.equal(snap.population,100);assert.equal(snap.day,0);assert.equal(sim.technology.canAction(0,ACTION.WOOD,sim),true,'coleta primitiva de madeira não pode depender de derrubar árvore');
+console.log('OK Phase D instrumentation: séries, ações, grupos, contato entre origens, genética, técnica, doença, save e determinismo');
