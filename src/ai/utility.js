@@ -18,16 +18,16 @@ export function scoreActions(sim,i,perception={}){
  const n=sim.npcs,m=sim.memory,g=x=>n.gene(i,x),need=x=>perceivedNeed(sim,i,x),known=k=>knownResource(sim,i,k),inv=n.inventory[i],tech=technologyFor(sim);
  const food=known(RESOURCE.BERRY),water=known(RESOURCE.WATER),wood=known(RESOURCE.LOG),stone=known(RESOURCE.STONE),iron=known(RESOURCE.IRON),fish=known(RESOURCE.FISH),dungeons=knownDungeons(sim,i);
  const shelter=visibleBuilding(perception,BUILDING.SHELTER),homeShelter=personalShelter(sim,i),fire=visibleBuilding(perception,BUILDING.CAMPFIRE),farm=visibleBuilding(perception,BUILDING.FARM),forge=visibleBuilding(perception,BUILDING.FORGE),human=perception.humans?.[0],rel=human?m.relation(i,human.id):null,wounded=perception.wounded?.[0],prey=perception.prey?.[0];
- const ids=localGroup(perception,i),groupSize=Math.max(1,ids.length),ownFood=personalFood(n,i),ownWater=inv[RESOURCE.WATER],nearFires=sim.world.buildings.filter(b=>b.finished&&b.type===BUILDING.CAMPFIRE&&Math.hypot(b.x-n.x[i],b.y-n.y[i])<12),fireNeed=nearFires.reduce((s,b)=>s+(b.lit?Math.max(0,1-(b.fuel||0)/180):1),0),woodDemand=C((5*groupSize-localQty(n,ids,RESOURCE.LOG))/(5*groupSize)+fireNeed*.22),stoneDemand=C((2*groupSize-localQty(n,ids,RESOURCE.STONE))/(2*groupSize)),ironDemand=C((1.5*groupSize-localQty(n,ids,RESOURCE.IRON))/(1.5*groupSize)),coverage=m.coverageRatio(i),night=sim.meta().phase==='noite'||sim.meta().phase==='madrugada',homeDist=homeShelter?Math.hypot(n.x[i]-homeShelter.x,n.y[i]-homeShelter.y):0,injury=(n.wound[i]||0)+(n.pain?.[i]||0),ignorance=(need(NEED.HUNGER)>.45&&!food?.4:0)+(need(NEED.THIRST)>.42&&!water?.55:0)+(woodDemand>.6&&!wood?.18:0)+(stoneDemand>.6&&!stone?.15:0),materialPressure=blockedMaterialPressure(sim,i,tech),teacherTarget=human?teachable(tech,n,i,human.id):0,huntTechnique=tech.knows(n,i,13),fishTechnique=tech.knows(n,i,12),netTechnique=tech.knows(n,i,30),huntStage=huntTechnique?1.35:.55,fishStage=netTechnique?1.65:fishTechnique?1.2:.62,preyRisk=prey?.risk||0,buildNeed=constructionNeedScore(sim,i,perception);
- const access=r=>r?territoryAccessFactor(sim,i,r.x,r.y):1,spec=p=>specialization(n,i,ids,p);
+ const ids=localGroup(perception,i),groupSize=Math.max(1,ids.length),ownFood=personalFood(n,i),ownWater=inv[RESOURCE.WATER],nearFires=sim.world.buildings.filter(b=>b.finished&&b.type===BUILDING.CAMPFIRE&&Math.hypot(b.x-n.x[i],b.y-n.y[i])<12),fireNeed=nearFires.reduce((s,b)=>s+(b.lit?Math.max(0,1-(b.fuel||0)/180):1),0),woodDemand=C((5*groupSize-localQty(n,ids,RESOURCE.LOG))/(5*groupSize)+fireNeed*.22),stoneDemand=C((2*groupSize-localQty(n,ids,RESOURCE.STONE))/(2*groupSize)),ironDemand=C((1.5*groupSize-localQty(n,ids,RESOURCE.IRON))/(1.5*groupSize)),coverage=m.coverageRatio(i),night=sim.meta().phase==='noite'||sim.meta().phase==='madrugada',homeDist=homeShelter?Math.hypot(n.x[i]-homeShelter.x,n.y[i]-homeShelter.y):0,injury=(n.wound[i]||0)+(n.pain?.[i]||0),ignorance=(need(NEED.HUNGER)>.45&&!food?.4:0)+(need(NEED.THIRST)>.42&&!water?.55:0)+(woodDemand>.6&&!wood?.18:0)+(stoneDemand>.6&&!stone?.15:0),materialPressure=blockedMaterialPressure(sim,i,tech),teacherTarget=human?teachable(tech,n,i,human.id):0,huntTechnique=tech.knows(n,i,13),fishTechnique=tech.knows(n,i,12),netTechnique=tech.knows(n,i,30),huntStage=huntTechnique?1.35:.55,fishStage=netTechnique?1.65:fishTechnique?1.2:.62,preyRisk=prey?.risk||0,buildNeed=constructionNeedScore(sim,i,perception),safety=need(NEED.SAFETY),purpose=need(NEED.PURPOSE);
+ const access=r=>r?territoryAccessFactor(sim,i,r.x,r.y):1,spec=p=>specialization(n,i,ids,p),threat=perception.threat||0;
  const scores=[
   [ACTION.EAT,Math.pow(need(NEED.HUNGER),3)*(ownFood>.06?1:.02)],
   [ACTION.DRINK,Math.pow(need(NEED.THIRST),3)*((ownWater>.06||water)?1:.02)],
-  [ACTION.SLEEP,Math.pow(need(NEED.SLEEP),3)*(shelter?1.15:.45)*(night?1.35:1)],
-  [ACTION.WARM,(fire||shelter)?Math.pow(need(NEED.TEMP),3)*(night?1.4:1):0],
-  [ACTION.RETURN,homeShelter&&homeDist>9?(.07+Math.min(.75,(homeDist-9)*.03))*(night?2.45:1):0],
-  [ACTION.FLEE,(perception.threat||0)*(.35+g(GENE.CAUTION)*1.35)*(1-g(GENE.AGGRESSION)*.45)+need(NEED.SAFETY)*.45],
-  [ACTION.FIGHT,(perception.threat||0)*(.28+g(GENE.AGGRESSION)*1.28)*(1-g(GENE.CAUTION)*.62)*(.55+n.skill(i,10))*spec(5)],
+  [ACTION.SLEEP,Math.pow(need(NEED.SLEEP),3)*(shelter?1.15:.45)*(night?1.35:1)*(1+(shelter?safety*.85:0))],
+  [ACTION.WARM,(fire||shelter)?(Math.pow(need(NEED.TEMP),3)+safety*.1)*(night?1.4:1):0],
+  [ACTION.RETURN,homeShelter&&homeDist>3?(.08+safety*.85+Math.min(.75,(homeDist-3)*.04))*(night?1.7:1):0],
+  [ACTION.FLEE,threat>0?threat*(.35+g(GENE.CAUTION)*1.35)*(1-g(GENE.AGGRESSION)*.45)+safety*.45:0],
+  [ACTION.FIGHT,threat*(.28+g(GENE.AGGRESSION)*1.28)*(1-g(GENE.CAUTION)*.62)*(.55+n.skill(i,10))*spec(5)],
   [ACTION.FORAGE,(need(NEED.HUNGER)*.62+(ownFood<.35?.42:.04))*distCost(food?.d)*(food?.confidence??0)*access(food)],
   [ACTION.WATER,(need(NEED.THIRST)*.72+(ownWater<.25?.52:.03))*distCost(water?.d)*(water?.confidence??0)*access(water)],
   [ACTION.WOOD,(.08+woodDemand*.82)*distCost(wood?.d)*(wood?.confidence??0)*(.5+n.skill(i,1))*spec(2)*access(wood)],
@@ -43,7 +43,7 @@ export function scoreActions(sim,i,perception={}){
   [ACTION.SOCIAL,human?Math.pow(need(NEED.SOCIAL),2)*(.35+g(GENE.SOCIABILITY))*(rel?1+C(rel.affection+.4):.65):0],
   [ACTION.TEACH,human&&teacherTarget?(.035+teacherTarget*.015+g(GENE.LOYALTY)*.08+(rel?.affection||0)*.06-g(GENE.GREED)*.055):0],
   [ACTION.BUILD,buildNeed?buildNeed*(.48+n.skill(i,6)*.5+g(GENE.AMBITION)*.12)*spec(9):0],
-  [ACTION.EXPLORE,(.05+(1-coverage)*.3+ignorance+materialPressure+need(NEED.PURPOSE)*.12)*(.2+g(GENE.CURIOSITY)*g(GENE.CURIOSITY)*.9)*(1-g(GENE.CAUTION)*.28)*(1-need(NEED.HUNGER)*.72)*(1-need(NEED.THIRST)*.74)*(1-Math.min(.7,injury*.45))*(night?.38:1)],
+  [ACTION.EXPLORE,(.05+(1-coverage)*.3+ignorance+materialPressure+purpose*.24)*(.2+g(GENE.CURIOSITY)*g(GENE.CURIOSITY)*.9)*(1-g(GENE.CAUTION)*.28)*(1-need(NEED.HUNGER)*.72)*(1-need(NEED.THIRST)*.74)*(1-Math.min(.7,injury*.45))*(night?.38:1)],
   [ACTION.DUNGEON,dungeons.length&&ownWater>.2&&ownFood>.2&&need(NEED.HUNGER)<.48&&need(NEED.THIRST)<.48&&n.stamina[i]>.42?(.1+g(GENE.AMBITION)*.5+n.prestige[i]*.001)*(1-g(GENE.CAUTION)*.58)*(.38+n.skill(i,10))*m.dangerModifier(i,'dungeon'):0]
  ];
  if(night)for(const row of scores)if([ACTION.WOOD,ACTION.STONE,ACTION.IRON,ACTION.FARM,ACTION.FISH,ACTION.HUNT,ACTION.BUILD,ACTION.FORGE,ACTION.TAILOR].includes(row[0]))row[1]*=.48;
