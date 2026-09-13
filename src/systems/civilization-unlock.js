@@ -1,8 +1,7 @@
 import {World} from '../world/world.js';
 import {MAP_W,MAP_H,RESOURCE,BIOME,WATER_KIND,TILE_TYPE} from '../core/constants.js';
 import {noiseHash} from '../core/rng.js';
-
-const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+import './resource-ecology.js';
 
 if(!World.prototype.__civilizationUnlockInstalled){
  // Mantém água como critério dominante, mas volta a considerar pedra já existente
