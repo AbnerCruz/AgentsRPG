@@ -3,7 +3,7 @@ const N=MAP_W*MAP_H,dirs=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.414],[1,-1,1.
 export class Pathfinder{
  constructor(world){this.world=world;this.cache=new Map();this.cacheLimit=192;this.came=new Int32Array(N);this.g=new Float32Array(N);this.f=new Float32Array(N);this.heap=new Int32Array(N);this.heapSize=0;this.open=new Uint8Array(N);this.searchBudget=0}
  clear(){this.cache.clear()}
- beginTick(limit=3){this.searchBudget=Math.max(0,limit|0)}
+ beginTick(limit=3){this.cache.clear();this.searchBudget=Math.max(0,limit|0)}
  cancel(owner){}
  cost(x,y){if(x<0||y<0||x>=MAP_W||y>=MAP_H)return Infinity;const id=Math.floor(y)*MAP_W+Math.floor(x),t=this.world.tiles[id],b=this.world.biomes[id];if(t===TILE_TYPE.WATER||b===BIOME.MOUNTAIN)return Infinity;let c=t===TILE_TYPE.ROAD?.68:t===TILE_TYPE.PATH?.78:t===TILE_TYPE.TRAIL?.88:t===TILE_TYPE.MARSH?2:t===TILE_TYPE.STONE?1.45:t===TILE_TYPE.FOREST?1.28:1;c*=1+Math.min(1.1,(this.world.slope?.[id]||0)/180);return c}
  request(owner,sx,sy,tx,ty){sx=Math.floor(sx);sy=Math.floor(sy);tx=Math.floor(tx);ty=Math.floor(ty);const key=this.key(sx,sy,tx,ty);if(sx===tx&&sy===ty)return new Int16Array(0);if(this.searchBudget<=0)return null;this.searchBudget--;const cached=this.cached(key);if(cached)return cached.slice();const direct=this.straightPath(sx,sy,tx,ty);if(direct){this.store(key,direct);return direct.slice()}return this._compute(sx,sy,tx,ty,key).slice()}
