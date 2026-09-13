@@ -1,12 +1,21 @@
 import {MAP_W,MAP_H,TILE,TILE_TYPE} from '../core/constants.js';
 const MODES=['biome','elevation','flow','moisture','temperature','slope','wear'];
+export function worldLayer(w,mode){
+ if(mode==='elevation')return w.elevation;
+ if(mode==='flow')return w.flow;
+ if(mode==='moisture')return w.moisture;
+ if(mode==='temperature')return w.temperature;
+ if(mode==='slope')return w.slope;
+ if(mode==='wear')return w.wear;
+ return w.biomes;
+}
 export function installLayerInspector(renderer,select){
  if(!renderer||!select)return;
  renderer.layerMode='biome';
  renderer.makeTerrain=()=>{
   const mode=renderer.layerMode;
   const w=renderer.sim.world,c=document.createElement('canvas');c.width=MAP_W*TILE;c.height=MAP_H*TILE;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
-  const layer=w.generationLayer(mode);let max=1,min=0;
+  const layer=worldLayer(w,mode);let max=1,min=0;
   if(mode==='flow'){max=0;for(const v of layer)max=Math.max(max,Math.log1p(v));max=max||1}
   if(mode==='temperature'){min=Infinity;max=-Infinity;for(const v of layer){min=Math.min(min,v);max=Math.max(max,v)}if(max===min)max=min+1}
   for(let y=0;y<MAP_H;y++)for(let xx=0;xx<MAP_W;xx++){const id=y*MAP_W+xx;let v=layer[id]||0;if(mode==='biome'){let c=colorFor(mode,0,w.biomes[id]),t=w.tiles[id];if(t===TILE_TYPE.TRAIL)c='#6b5a3e';else if(t===TILE_TYPE.PATH)c='#705d40';else if(t===TILE_TYPE.ROAD)c='#806a4a';else if(t===TILE_TYPE.DUNGEON)c='#302534';x.fillStyle=c;x.fillRect(xx*TILE,y*TILE,TILE,TILE);continue}if(mode==='flow')v=Math.log1p(v)/max;else if(mode==='temperature')v=(v-min)/(max-min);else if(mode==='slope'||mode==='wear')v/=255;v=Math.max(0,Math.min(1,v));x.fillStyle=colorFor(mode,v,w.biomes[id]);x.fillRect(xx*TILE,y*TILE,TILE,TILE)}
