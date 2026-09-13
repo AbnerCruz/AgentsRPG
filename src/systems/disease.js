@@ -1,6 +1,7 @@
 import {GENE,BIOME,RESOURCE} from '../core/constants.js';
 import {technologyFor} from './technology.js';
 import {BALANCE} from '../calibration/balance.js';
+import {roomAt} from './construction.js';
 
 export const DISEASES=[
  {id:0,key:'gastro',name:'doença alimentar',incubation:160,duration:900,severity:.34,lethality:.000035,infectivity:.04,immune:true},
@@ -18,4 +19,4 @@ export function diseaseTick(sim){const n=sim.npcs,t=technologyFor(sim);for(const
   if(sim.tick%60===i%60){const b=sim.world.biome(n.x[i],n.y[i]);if(b===BIOME.MARSH&&sim.rng.chance(.014*BALANCE.diseaseSpreadMult*(1-n.gene(i,GENE.DISEASE)*.6)))infect(sim,i,3);if(untreatedWound(n,i)&&!t.knows(n,i,15)&&sim.rng.chance(.018*BALANCE.diseaseSpreadMult*(1-n.gene(i,GENE.DISEASE)*.6)))infect(sim,i,2);const cold=n.need(i,3);if(cold>.72&&sim.world.moisture?.[sim.world.idx(n.x[i],n.y[i])]>.55&&sim.rng.chance(.012*BALANCE.diseaseSpreadMult))infect(sim,i,1)}
  }
  if(sim.tick%30===0)proximitySpread(sim)}
-function proximitySpread(sim){const n=sim.npcs,alive=n.living();for(let a=0;a<alive.length;a++){const i=alive[a],active=n.activeDisease[i];if(!active)continue;const d=DISEASES[active-1];if(!d.infectivity||n.diseaseTimer[i]<d.incubation)continue;for(let b=a+1;b<alive.length;b++){const j=alive[b];if(Math.hypot(n.x[i]-n.x[j],n.y[i]-n.y[j])>2.2)continue;if(sim.rng.chance(d.infectivity*.08*BALANCE.diseaseSpreadMult)){infect(sim,j,d.id,i);break}}}}
+function proximitySpread(sim){const n=sim.npcs,alive=n.living();for(let a=0;a<alive.length;a++){const i=alive[a],active=n.activeDisease[i];if(!active)continue;const d=DISEASES[active-1];if(!d.infectivity||n.diseaseTimer[i]<d.incubation)continue;const ri=roomAt(sim.world,n.x[i],n.y[i]);for(let b=a+1;b<alive.length;b++){const j=alive[b];if(Math.hypot(n.x[i]-n.x[j],n.y[i]-n.y[j])>2.2)continue;const rj=roomAt(sim.world,n.x[j],n.y[j]);if((ri||rj)&&ri?.id!==rj?.id)continue;if(sim.rng.chance(d.infectivity*.08*BALANCE.diseaseSpreadMult)){infect(sim,j,d.id,i);break}}}}
