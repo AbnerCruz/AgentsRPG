@@ -1,4 +1,4 @@
-export const VERSION=9;
+export const VERSION=10;
 export const MAP_W=192, MAP_H=192, TILE=16, MAX_NPCS=512, MAX_ANIMALS=1200;
 export const DAY_TICKS=840;
 export const TECH_COUNT=43;

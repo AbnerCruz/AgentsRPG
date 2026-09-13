@@ -1,15 +1,17 @@
 import {MAP_W,MAP_H,TILE_TYPE,BIOME} from '../core/constants.js';
-const N=MAP_W*MAP_H,dirs=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.414],[1,-1,1.414],[-1,1,1.414],[-1,-1,1.414]];
+const N=MAP_W*MAP_H,REGION=16,RW=Math.ceil(MAP_W/REGION),RH=Math.ceil(MAP_H/REGION),dirs=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.414],[1,-1,1.414],[-1,1,1.414],[-1,-1,1.414]];
 export class Pathfinder{
- constructor(world){this.world=world;this.cache=new Map();this.cacheLimit=192;this.came=new Int32Array(N);this.g=new Float32Array(N);this.f=new Float32Array(N);this.heap=new Int32Array(N);this.heapSize=0;this.open=new Uint8Array(N);this.searchBudget=0}
+ constructor(world){this.world=world;this.cache=new Map();this.cacheLimit=192;this.came=new Int32Array(N);this.g=new Float32Array(N);this.f=new Float32Array(N);this.heap=new Int32Array(N);this.heapSize=0;this.open=new Uint8Array(N);this.searchBudget=0;this.regionVersion=new Uint16Array(RW*RH)}
  clear(){this.cache.clear()}
- beginTick(limit=3){this.cache.clear();this.searchBudget=Math.max(0,limit|0)}
+ beginTick(limit=3){this.searchBudget=Math.max(0,limit|0)}
  cancel(owner){}
- cost(x,y){if(x<0||y<0||x>=MAP_W||y>=MAP_H)return Infinity;const id=Math.floor(y)*MAP_W+Math.floor(x),t=this.world.tiles[id],b=this.world.biomes[id];if(t===TILE_TYPE.WATER||b===BIOME.MOUNTAIN)return Infinity;let c=t===TILE_TYPE.ROAD?.68:t===TILE_TYPE.PATH?.78:t===TILE_TYPE.TRAIL?.88:t===TILE_TYPE.MARSH?2:t===TILE_TYPE.STONE?1.45:t===TILE_TYPE.FOREST?1.28:1;c*=1+Math.min(1.1,(this.world.slope?.[id]||0)/180);return c}
+ invalidateRegion(x,y){const rx=Math.max(0,Math.min(RW-1,Math.floor(x/REGION))),ry=Math.max(0,Math.min(RH-1,Math.floor(y/REGION)));for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=rx+dx,ny=ry+dy;if(nx<0||ny<0||nx>=RW||ny>=RH)continue;const k=ny*RW+nx;this.regionVersion[k]=(this.regionVersion[k]+1)&65535}}
+ regionSignature(sx,sy,tx,ty){const ax=Math.max(0,Math.floor(Math.min(sx,tx)/REGION)),bx=Math.min(RW-1,Math.floor(Math.max(sx,tx)/REGION)),ay=Math.max(0,Math.floor(Math.min(sy,ty)/REGION)),by=Math.min(RH-1,Math.floor(Math.max(sy,ty)/REGION));let h=2166136261;for(let y=ay;y<=by;y++)for(let x=ax;x<=bx;x++){h^=(y*RW+x)*131+this.regionVersion[y*RW+x];h=Math.imul(h,16777619)}return h>>>0}
+ cost(x,y){if(x<0||y<0||x>=MAP_W||y>=MAP_H)return Infinity;const id=Math.floor(y)*MAP_W+Math.floor(x),t=this.world.tiles[id],b=this.world.biomes[id];if(t===TILE_TYPE.WATER||b===BIOME.MOUNTAIN)return Infinity;const structure=this.world.structureCost?.(x,y)??1;if(!Number.isFinite(structure))return Infinity;let c=t===TILE_TYPE.ROAD?.68:t===TILE_TYPE.PATH?.78:t===TILE_TYPE.TRAIL?.88:t===TILE_TYPE.MARSH?2:t===TILE_TYPE.STONE?1.45:t===TILE_TYPE.FOREST?1.28:1;c*=1+Math.min(1.1,(this.world.slope?.[id]||0)/180);return c*structure}
  request(owner,sx,sy,tx,ty){sx=Math.floor(sx);sy=Math.floor(sy);tx=Math.floor(tx);ty=Math.floor(ty);const key=this.key(sx,sy,tx,ty);if(sx===tx&&sy===ty)return new Int16Array(0);if(this.searchBudget<=0)return null;this.searchBudget--;const cached=this.cached(key);if(cached)return cached.slice();const direct=this.straightPath(sx,sy,tx,ty);if(direct){this.store(key,direct);return direct.slice()}return this._compute(sx,sy,tx,ty,key).slice()}
  find(sx,sy,tx,ty){sx=Math.floor(sx);sy=Math.floor(sy);tx=Math.floor(tx);ty=Math.floor(ty);const key=this.key(sx,sy,tx,ty),path=this.cached(key)||this.straightPath(sx,sy,tx,ty)||this._compute(sx,sy,tx,ty,key),out=[];for(let k=0;k<path.length;k+=2)out.push([path[k]+.5,path[k+1]+.5]);return out}
  estimateDistance(sx,sy,tx,ty){sx=Math.floor(sx);sy=Math.floor(sy);tx=Math.floor(tx);ty=Math.floor(ty);const direct=this.straightPath(sx,sy,tx,ty);return Math.hypot(tx-sx,ty-sy)*(direct?1:1.35)}
- key(sx,sy,tx,ty){return`${sx},${sy}:${tx},${ty}`}
+ key(sx,sy,tx,ty){return`${sx},${sy}:${tx},${ty}:${this.regionSignature(sx,sy,tx,ty)}`}
  cached(key){const v=this.cache.get(key);if(!v)return null;this.cache.delete(key);this.cache.set(key,v);return v}
  store(key,path){if(this.cache.has(key))this.cache.delete(key);this.cache.set(key,path.slice());while(this.cache.size>this.cacheLimit)this.cache.delete(this.cache.keys().next().value)}
  straightPath(sx,sy,tx,ty){const dx=tx-sx,dy=ty-sy,steps=Math.max(Math.abs(dx),Math.abs(dy));if(!steps)return new Int16Array(0);for(let s=1;s<=steps;s++){const x=Math.round(sx+dx*s/steps),y=Math.round(sy+dy*s/steps);if(!Number.isFinite(this.cost(x,y)))return null}return Int16Array.from([tx,ty])}

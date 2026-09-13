@@ -19,6 +19,7 @@ import {Dungeon} from './dungeon/dungeon.js';
 import {TechnologySystem,technologyFor} from './systems/technology.js';
 import {SensorySystem} from './systems/senses.js';
 import {diseaseTick} from './systems/disease.js';
+import './systems/construction-hardening.js';
 
 const REVIEW_TICKS=120,TRAVEL_REVIEW_TICKS=480,NEAR_RADIUS=18,MEDIUM_RADIUS=NEAR_RADIUS*3;
 
