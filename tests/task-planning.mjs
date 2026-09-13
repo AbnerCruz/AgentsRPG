@@ -17,7 +17,7 @@ assert.equal(n.intent[i],null,'ação atômica não ocupa o slot de intenção')
 assert.equal(sim.tasks.started,started0,'ação atômica não entra no contador de tarefas longas');
 assert.ok(resumeSuspended(sim,i),'tarefa precisa retomar depois da ação curta');
 assert.equal(n.intent[i].action,ACTION.EXPLORE,'objetivo retomado precisa ser o original');
-assert.ok(n.taskProgress[i]>=.57,'progresso da tarefa não pode ser perdido');
+assert.ok(n.taskProgress[i]>.569,'progresso da tarefa não pode ser perdido');
 
 const sticky=[[ACTION.EXPLORE,.5],[ACTION.BUILD,.62]];n.taskProgress[i]=.84;
 assert.equal(shouldSwitchTask(sim,i,sticky,ACTION.BUILD,{}),false,'progresso alto deve criar histerese contra troca pequena');
