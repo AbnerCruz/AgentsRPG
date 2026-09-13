@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {Simulation} from '../src/simulation.js';
 
 const normalize=sim=>{const x=sim.serialize();delete x.savedAt;return x};
+const transported=x=>JSON.parse(JSON.stringify(x));
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex').slice(0,12);
 const arr=a=>ArrayBuffer.isView(a)?Array.from(a):a;
 function diffState(a,b){
@@ -54,7 +55,9 @@ function assertStateEqual(a,b,label){const bad=diffState(a,b);assert.equal(bad.l
 
 const original=new Simulation(5150);
 for(let i=0;i<48;i++)original.step();
-const restored=Simulation.hydrate(original.serialize());
+// Exercise the same value boundary as browser persistence: no shared object references
+// may survive between the live simulation and the hydrated copy.
+const restored=Simulation.hydrate(transported(original.serialize()));
 assertStateEqual(restored,original,'hidratação deve reproduzir exatamente o estado salvo');
 const hiddenWorld=diffWorldInternals(restored,original);
 assert.equal(hiddenWorld.length,0,`hidratação compacta diverge internamente antes do primeiro tick: ${hiddenWorld.join(', ')}`);
