@@ -1,0 +1,18 @@
+name: Package Source
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build source zip
+        run: zip -r AgentsRPG-source.zip . -x '.git/*' 'AgentsRPG-source.zip'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AgentsRPG-source
+          path: AgentsRPG-source.zip
+          if-no-files-found: error
