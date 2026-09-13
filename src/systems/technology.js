@@ -54,7 +54,7 @@ export class TechnologySystem{
   this.discoveries=data?.discoveries||[];
   this.crossGroupTransfers=data?.crossGroupTransfers||0;
   this.focusByUid=new Map(data?.focusByUid||[]);
-  this.lastAttemptByUid=new Map();
+  this.lastAttemptByUid=new Map(data?.lastAttemptByUid||[]);
  }
  attach(sim){this.sim=sim;return this}
  ensure(){return this}
@@ -96,7 +96,7 @@ export class TechnologySystem{
  inherit(sim,parent,child){this.attach(sim);const n=sim.npcs;if(child<0||parent<0)return;for(let t=0;t<TECH_COUNT;t++)if(this.knows(n,parent,t)&&this.prerequisites(n,child,t)&&!this.knows(n,child,t)){this.focusByUid.set(n.uid[child],t);const gain=2+Math.round(n.gene(child,GENE.LEARNING)*4),learned=this.progress(n,child,t,gain,n.uid[parent],sim.tick);if(learned){this.focusByUid.delete(n.uid[child]);this.onDiscovery(sim,child,t,`aprendido na família com ${n.names[parent]}`)}}}
  onDiscovery(sim,i,t,channel){this.attach(sim);const n=sim.npcs,tech=TECH[t],sourceUid=n.techSource[i*TECH_COUNT+t];this.discoveries.push({tick:sim.tick,npc:n.uid[i],tech:t,channel,sourceUid});if(this.discoveries.length>800)this.discoveries.shift();if(sourceUid>0){const source=n.indexByUid(sourceUid);if(source>=0&&Math.hypot(n.homeX[source]-n.homeX[i],n.homeY[source]-n.homeY[i])>18)this.crossGroupTransfers++}sim.memory.remember(i,{type:'técnica',text:`Aprendi ${tech.name} por ${channel}.`,tick:sim.tick,valence:5,importance:.9,reflectionKey:`tecnica:${tech.key}`});sim.log('descoberta',`${n.names[i]} aprendeu ${tech.name}.`,.92,i);if(t===4&&n.tool[i]===TOOL.NONE)n.tool[i]=TOOL.AXE;if(t===5&&n.tool[i]===TOOL.NONE)n.tool[i]=TOOL.PICK;if(t===6&&n.tool[i]===TOOL.NONE)n.tool[i]=TOOL.KNIFE}
  forgetNpc(uid){this.focusByUid.delete(uid);this.lastAttemptByUid.delete(uid)}
- serialize(){return{discoveries:this.discoveries,crossGroupTransfers:this.crossGroupTransfers,focusByUid:Array.from(this.focusByUid)}}
+ serialize(){return{discoveries:this.discoveries,crossGroupTransfers:this.crossGroupTransfers,focusByUid:Array.from(this.focusByUid),lastAttemptByUid:Array.from(this.lastAttemptByUid)}}
  static hydrate(data,sim=null){return new TechnologySystem(sim,data||{})}
 }
 
