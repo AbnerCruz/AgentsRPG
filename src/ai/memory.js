@@ -1,6 +1,14 @@
 import {MAP_W,MAP_H,GENE} from '../core/constants.js';
 const DECAY=.998,EMPTY=-1,CHUNK=16,CW=Math.ceil(MAP_W/CHUNK),CH=Math.ceil(MAP_H/CHUNK),DAY_MEMORY=840*45;
 function makeSpatial(capacity){const tiles=new Int32Array(capacity);tiles.fill(EMPTY);const source=new Int32Array(capacity);source.fill(-1);return{capacity,count:0,tiles,seen:new Uint32Array(capacity),resource:new Uint32Array(capacity),flags:new Uint16Array(capacity),quantity:new Float32Array(capacity),confidence:new Float32Array(capacity),source,coverage:new Uint8Array(CW*CH)}}
+const packEvent=e=>[e.type??null,e.text??null,e.tick??0,e.valence??null,e.importance??null,e.reflectionKey??null,e.accesses??0];
+const unpackEvent=e=>Array.isArray(e)?{type:e[0],text:e[1],tick:e[2]??0,valence:e[3],importance:e[4],reflectionKey:e[5],accesses:e[6]??0}:{...e};
+const packFact=f=>[f.key??null,f.text??null,f.tick??0,f.confidence??null,f.source??null];
+const unpackFact=f=>Array.isArray(f)?{key:f[0],text:f[1],tick:f[2]??0,confidence:f[3],source:f[4]}:{...f};
+const packBelief=b=>[b.key??null,b.text??null,b.valence??0,b.tick??0];
+const unpackBelief=b=>Array.isArray(b)?{key:b[0],text:b[1],valence:b[2]??0,tick:b[3]??0}:{...b};
+const packRelation=(j,r)=>[j,r.trust||0,r.affection||0,r.fear||0,r.respect||0,r.anger||0,r.debt||0,r.knowledgeDebt||0];
+const unpackRelation=row=>Array.isArray(row)&&row.length>2?[row[0],{trust:row[1]||0,affection:row[2]||0,fear:row[3]||0,respect:row[4]||0,anger:row[5]||0,debt:row[6]||0,knowledgeDebt:row[7]||0}]:row;
 export class MemorySystem{
  constructor(){this.episodic=new Map();this.semantic=new Map();this.beliefs=new Map();this.relations=new Map();this.spatial=new Map()}
  ensure(i,capacity=200){if(!this.episodic.has(i))this.episodic.set(i,[]);if(!this.semantic.has(i))this.semantic.set(i,[]);if(!this.beliefs.has(i))this.beliefs.set(i,[]);if(!this.relations.has(i))this.relations.set(i,new Map());if(!this.spatial.has(i))this.spatial.set(i,makeSpatial(capacity))}
@@ -24,7 +32,21 @@ export class MemorySystem{
  reflect(i,tick){this.ensure(i);const recent=this.episodic.get(i).filter(m=>tick-m.tick<5000),groups=new Map();for(const m of recent){const k=m.reflectionKey||m.type;if(!k)continue;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(m)}for(const[k,a]of groups)if(a.length>=3){const val=a.reduce((s,m)=>s+(m.valence||0),0)/a.length,text=val>=0?`Experiências repetidas com ${k} parecem confiáveis.`:`Experiências repetidas com ${k} parecem perigosas.`,b=this.beliefs.get(i),old=b.find(x=>x.key===k);if(old){old.valence=(old.valence+val)*.5;old.tick=tick;old.text=text}else{b.push({key:k,text,valence:val,tick});this.remember(i,{type:'reflexão',text:`Concluí: ${text}`,tick,valence:val,importance:.9})}}}
  dangerModifier(i,tag){this.ensure(i);const b=this.beliefs.get(i).find(x=>x.key===tag&&x.valence<0);return b?Math.max(.22,1+b.valence/12):1}
  compactDead(i){this.ensure(i);const top=(this.episodic.get(i)||[]).slice().sort((a,b)=>(b.importance||0)-(a.importance||0)).slice(0,5);this.episodic.set(i,top);this.semantic.set(i,[]);this.beliefs.set(i,(this.beliefs.get(i)||[]).slice(-3));this.relations.set(i,new Map());this.spatial.delete(i)}
- serialize(){const mapToArr=m=>Array.from(m,([k,v])=>[k,v instanceof Map?Array.from(v):v]),spatial=Array.from(this.spatial,([i,s])=>[i,{capacity:s.capacity,count:s.count,tiles:Array.from(s.tiles.slice(0,s.count)),seen:Array.from(s.seen.slice(0,s.count)),resource:Array.from(s.resource.slice(0,s.count)),flags:Array.from(s.flags.slice(0,s.count)),quantity:Array.from(s.quantity.slice(0,s.count)),confidence:Array.from(s.confidence.slice(0,s.count)),source:Array.from(s.source.slice(0,s.count)),coverage:Array.from(s.coverage)}]);return{episodic:mapToArr(this.episodic),semantic:mapToArr(this.semantic),beliefs:mapToArr(this.beliefs),relations:mapToArr(this.relations),spatial}}
- static hydrate(d){const s=new MemorySystem();for(const k of['episodic','semantic','beliefs'])s[k]=new Map(d?.[k]||[]);s.relations=new Map((d?.relations||[]).map(([i,a])=>[i,new Map(a)]));for(const[i,x]of d?.spatial||[]){const q=makeSpatial(x.capacity||200);q.count=Math.min(x.count||x.tiles?.length||0,q.capacity);q.tiles.set((x.tiles||[]).slice(0,q.count));q.seen.set((x.seen||[]).slice(0,q.count));q.resource.set((x.resource||[]).slice(0,q.count));q.flags.set((x.flags||[]).slice(0,q.count));q.quantity.set((x.quantity||[]).slice(0,q.count));q.confidence.set((x.confidence||Array(q.count).fill(.7)).slice(0,q.count));q.source.set((x.source||Array(q.count).fill(-1)).slice(0,q.count));q.coverage.set((x.coverage||[]).slice(0,q.coverage.length));s.spatial.set(i,q)}return s}
+ serialize(){
+  const episodic=Array.from(this.episodic,([i,a])=>[i,a.map(packEvent)]),semantic=Array.from(this.semantic,([i,a])=>[i,a.map(packFact)]),beliefs=Array.from(this.beliefs,([i,a])=>[i,a.map(packBelief)]),relations=Array.from(this.relations,([i,m])=>[i,Array.from(m,([j,r])=>packRelation(j,r))]),spatial=Array.from(this.spatial,([i,s])=>[i,s.capacity,s.count,Array.from(s.tiles.slice(0,s.count)),Array.from(s.seen.slice(0,s.count)),Array.from(s.resource.slice(0,s.count)),Array.from(s.flags.slice(0,s.count)),Array.from(s.quantity.slice(0,s.count)),Array.from(s.confidence.slice(0,s.count)),Array.from(s.source.slice(0,s.count)),Array.from(s.coverage)]);
+  return{format:2,episodic,semantic,beliefs,relations,spatial}
+ }
+ static hydrate(d){
+  const s=new MemorySystem(),format=d?.format||1;
+  if(format>=2){
+   s.episodic=new Map((d?.episodic||[]).map(([i,a])=>[i,(a||[]).map(unpackEvent)]));
+   s.semantic=new Map((d?.semantic||[]).map(([i,a])=>[i,(a||[]).map(unpackFact)]));
+   s.beliefs=new Map((d?.beliefs||[]).map(([i,a])=>[i,(a||[]).map(unpackBelief)]));
+   s.relations=new Map((d?.relations||[]).map(([i,a])=>[i,new Map((a||[]).map(unpackRelation))]));
+   for(const row of d?.spatial||[]){const[i,capacity,count,tiles,seen,resource,flags,quantity,confidence,source,coverage]=row,q=makeSpatial(capacity||200);q.count=Math.min(count||tiles?.length||0,q.capacity);q.tiles.set((tiles||[]).slice(0,q.count));q.seen.set((seen||[]).slice(0,q.count));q.resource.set((resource||[]).slice(0,q.count));q.flags.set((flags||[]).slice(0,q.count));q.quantity.set((quantity||[]).slice(0,q.count));q.confidence.set((confidence||Array(q.count).fill(.7)).slice(0,q.count));q.source.set((source||Array(q.count).fill(-1)).slice(0,q.count));q.coverage.set((coverage||[]).slice(0,q.coverage.length));s.spatial.set(i,q)}
+   return s
+  }
+  for(const k of['episodic','semantic','beliefs'])s[k]=new Map((d?.[k]||[]).map(([i,a])=>[i,(a||[]).map(x=>({...x}))]));s.relations=new Map((d?.relations||[]).map(([i,a])=>[i,new Map((a||[]).map(([j,r])=>[j,{...r}]))]));for(const[i,x]of d?.spatial||[]){const q=makeSpatial(x.capacity||200);q.count=Math.min(x.count||x.tiles?.length||0,q.capacity);q.tiles.set((x.tiles||[]).slice(0,q.count));q.seen.set((x.seen||[]).slice(0,q.count));q.resource.set((x.resource||[]).slice(0,q.count));q.flags.set((x.flags||[]).slice(0,q.count));q.quantity.set((x.quantity||[]).slice(0,q.count));q.confidence.set((x.confidence||Array(q.count).fill(.7)).slice(0,q.count));q.source.set((x.source||Array(q.count).fill(-1)).slice(0,q.count));q.coverage.set((x.coverage||[]).slice(0,q.coverage.length));s.spatial.set(i,q)}return s
+ }
 }
 export const SPATIAL_FLAG={DUNGEON:1,BUILDING:2,WATER:4,THREAT:8,SMOKE:16,HUMAN:32,FIRE:64};
