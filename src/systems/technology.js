@@ -1,4 +1,5 @@
 import {ACTION,GENE,RESOURCE,TECH_COUNT,TOOL,TILE_TYPE,BIOME} from '../core/constants.js';
+import {BALANCE} from '../calibration/balance.js';
 
 export const TECH=[
  {id:0,key:'knap',name:'Lascar pedra',pre:[],mat:[RESOURCE.STONE]},
@@ -53,14 +54,14 @@ export class TechnologySystem{
   this.discoveries=data?.discoveries||[];
   this.crossGroupTransfers=data?.crossGroupTransfers||0;
   this.focusByUid=new Map(data?.focusByUid||[]);
-  this.lastAttemptByUid=new Map();
+  this.lastAttemptByUid=new Map(data?.lastAttemptByUid||[]);
  }
  attach(sim){this.sim=sim;return this}
  ensure(){return this}
  knows(n,i,t){return t<32?!!(n.techKnownLo[i]&(1<<t)):!!(n.techKnownHi[i]&(1<<(t-32)))}
  setKnown(n,i,t,sourceUid=-1,tick=0){if(this.knows(n,i,t))return false;if(t<32)n.techKnownLo[i]|=1<<t;else n.techKnownHi[i]|=1<<(t-32);n.techProgress[i*TECH_COUNT+t]=255;n.techSource[i*TECH_COUNT+t]=sourceUid;n.techLearnTick[i*TECH_COUNT+t]=tick;return true}
  knownList(i){const n=this.sim?.npcs;if(!n)return[];const out=[];for(let t=0;t<TECH_COUNT;t++)if(this.knows(n,i,t))out.push(t);return out}
- canAction(i,action,sim=this.sim){const t=ACTION_TECH.get(action);if(t==null)return true;const n=sim?.npcs;if(!n)return false;return this.knows(n,i,t)}
+ canAction(i,action,sim=this.sim){if(action===ACTION.WOOD)return true;const t=ACTION_TECH.get(action);if(t==null)return true;const n=sim?.npcs;if(!n)return false;return this.knows(n,i,t)}
  countKnown(n,i){let c=0;for(let t=0;t<TECH_COUNT;t++)if(this.knows(n,i,t))c++;return c}
  prerequisites(n,i,t){return !!TECH[t]&&TECH[t].pre.every(p=>this.knows(n,i,p))}
  availableMaterial(sim,i,t){
@@ -80,13 +81,13 @@ export class TechnologySystem{
  progress(n,i,t,amount,sourceUid=-1,tick=0){if(this.knows(n,i,t)||!this.prerequisites(n,i,t))return false;const p=i*TECH_COUNT+t;n.techProgress[p]=Math.min(255,n.techProgress[p]+Math.max(1,amount|0));if(sourceUid>=0)n.techSource[p]=sourceUid;if(n.techProgress[p]>=255)return this.setKnown(n,i,t,n.techSource[p],tick);return false}
  experiment(sim,i){
   this.attach(sim);const n=sim.npcs,uid=n.uid[i];if(!uid||n.age[i]<12||n.need(i,0)>.84||n.need(i,1)>.84)return null;
-  const last=this.lastAttemptByUid.get(uid)??-9999;if(sim.tick-last<40)return null;this.lastAttemptByUid.set(uid,sim.tick);
+  const last=this.lastAttemptByUid.get(uid)??-9999;if(sim.tick-last<BALANCE.experimentInterval)return null;this.lastAttemptByUid.set(uid,sim.tick);
   const candidates=[];for(let t=0;t<TECH_COUNT;t++)if(!this.knows(n,i,t)&&this.prerequisites(n,i,t)&&this.availableMaterial(sim,i,t))candidates.push(t);if(!candidates.length){this.focusByUid.delete(uid);return null}
   let t=this.focusByUid.get(uid);if(!candidates.includes(t)){t=sim.rng.weighted(candidates,x=>1+(n.techProgress[i*TECH_COUNT+x]||0)/80+(x<3?.35:0));this.focusByUid.set(uid,t)}
   const creativity=n.gene(i,GENE.CREATIVITY),curiosity=n.gene(i,GENE.CURIOSITY),stubborn=n.gene(i,GENE.STUBBORN),frustration=Math.min(1,(n.need(i,6)||0)+.15),p=n.techProgress[i*TECH_COUNT+t]||0;
-  const chance=.03*(.25+creativity*.75)*(.35+curiosity*.65)*(.55+frustration*.45)*(1+p/255*.3)*(1+stubborn*.18);
+  const chance=.03*BALANCE.experimentChanceMult*(.25+creativity*.75)*(.35+curiosity*.65)*(.55+frustration*.45)*(1+p/255*.3)*(1+stubborn*.18);
   if(!sim.rng.chance(chance))return{tech:t,learned:false,progress:p};
-  const gain=62+Math.round((creativity+curiosity)*32+sim.rng.range(0,28)),learned=this.progress(n,i,t,gain,-1,sim.tick);
+  const gain=(62+Math.round((creativity+curiosity)*32+sim.rng.range(0,28)))*BALANCE.experimentGainMult,learned=this.progress(n,i,t,gain,-1,sim.tick);
   if(learned){this.focusByUid.delete(uid);this.onDiscovery(sim,i,t,'experimentação')}
   return{tech:t,learned,progress:n.techProgress[i*TECH_COUNT+t]};
  }
@@ -95,7 +96,7 @@ export class TechnologySystem{
  inherit(sim,parent,child){this.attach(sim);const n=sim.npcs;if(child<0||parent<0)return;for(let t=0;t<TECH_COUNT;t++)if(this.knows(n,parent,t)&&this.prerequisites(n,child,t)&&!this.knows(n,child,t)){this.focusByUid.set(n.uid[child],t);const gain=2+Math.round(n.gene(child,GENE.LEARNING)*4),learned=this.progress(n,child,t,gain,n.uid[parent],sim.tick);if(learned){this.focusByUid.delete(n.uid[child]);this.onDiscovery(sim,child,t,`aprendido na família com ${n.names[parent]}`)}}}
  onDiscovery(sim,i,t,channel){this.attach(sim);const n=sim.npcs,tech=TECH[t],sourceUid=n.techSource[i*TECH_COUNT+t];this.discoveries.push({tick:sim.tick,npc:n.uid[i],tech:t,channel,sourceUid});if(this.discoveries.length>800)this.discoveries.shift();if(sourceUid>0){const source=n.indexByUid(sourceUid);if(source>=0&&Math.hypot(n.homeX[source]-n.homeX[i],n.homeY[source]-n.homeY[i])>18)this.crossGroupTransfers++}sim.memory.remember(i,{type:'técnica',text:`Aprendi ${tech.name} por ${channel}.`,tick:sim.tick,valence:5,importance:.9,reflectionKey:`tecnica:${tech.key}`});sim.log('descoberta',`${n.names[i]} aprendeu ${tech.name}.`,.92,i);if(t===4&&n.tool[i]===TOOL.NONE)n.tool[i]=TOOL.AXE;if(t===5&&n.tool[i]===TOOL.NONE)n.tool[i]=TOOL.PICK;if(t===6&&n.tool[i]===TOOL.NONE)n.tool[i]=TOOL.KNIFE}
  forgetNpc(uid){this.focusByUid.delete(uid);this.lastAttemptByUid.delete(uid)}
- serialize(){return{discoveries:this.discoveries,crossGroupTransfers:this.crossGroupTransfers,focusByUid:Array.from(this.focusByUid)}}
+ serialize(){return{discoveries:this.discoveries,crossGroupTransfers:this.crossGroupTransfers,focusByUid:Array.from(this.focusByUid),lastAttemptByUid:Array.from(this.lastAttemptByUid)}}
  static hydrate(data,sim=null){return new TechnologySystem(sim,data||{})}
 }
 
