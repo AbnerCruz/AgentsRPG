@@ -1,27 +1,314 @@
-import {MAX_NPCS,NEED,GENE,SKILLS,RESOURCE,PROF,TOOL,ARMOR,NUTRITION} from '../core/constants.js';
+import {MAX_NPCS,NEED,GENE,SKILLS,RESOURCE,PROF,TOOL,ARMOR,NUTRITION,ACTION,ACTION_ID,NPC_STATE} from '../core/constants.js';
 import {randomGenome,inheritGenome,derived} from '../genetics/genome.js';
+
 const FIRST=['Alda','Brann','Cira','Doran','Eira','Fenn','Gala','Hadr','Iria','Jorn','Kara','Leto','Mira','Norn','Orla','Perr','Runa','Sven','Tara','Ulric','Vera','Wynn'];
 const LAST=['Pedra','Freixo','Corvo','Vale','Ferro','Rio','Musgo','Cinza','Lobo','Olmo','Luar','Sal'];
-const typedKeys=['alive','uid','x','y','prevX','prevY','age','sex','hp','stamina','prestige','prof','needs','genes','skills','partner','birthTick','deathTick','progress','facing','moving','tool','armor','wound','infection','nutrition'];
+
+const serialTypedKeys=[
+ 'alive','uid','x','y','age','sex','hp','stamina','prestige','prof','needs','genes','skills','partner',
+ 'birthTick','deathTick','state','taskKind','taskTargetX','taskTargetY','taskTargetRef','taskProgress',
+ 'taskDuration','taskTimeout','tool','armor','wound','infection','nutrition'
+];
+
 export class NPCStore{
- constructor(){const n=MAX_NPCS;this.alive=new Uint8Array(n);this.uid=new Uint32Array(n);this.x=new Float32Array(n);this.y=new Float32Array(n);this.prevX=new Float32Array(n);this.prevY=new Float32Array(n);this.age=new Float32Array(n);this.sex=new Uint8Array(n);this.hp=new Float32Array(n);this.stamina=new Float32Array(n);this.prestige=new Float32Array(n);this.prof=new Uint8Array(n);this.needs=new Float32Array(n*NEED.COUNT);this.genes=new Float32Array(n*GENE.COUNT);this.skills=new Float32Array(n*SKILLS.length);this.nutrition=new Float32Array(n*NUTRITION.COUNT);this.names=Array(n).fill('');this.parents=Array.from({length:n},()=>[-1,-1]);this.children=Array.from({length:n},()=>[]);this.partner=new Int16Array(n).fill(-1);this.action=Array(n).fill('observar');this.intent=Array(n).fill(null);this.plan=Array.from({length:n},()=>[]);this.scores=Array.from({length:n},()=>[]);this.route=Array.from({length:n},()=>[]);this.routeIndex=new Uint16Array(n);this.inventory=Array.from({length:n},()=>new Float32Array(RESOURCE.COUNT));this.birthTick=new Uint32Array(n);this.deathTick=new Uint32Array(n);this.deathCause=Array(n).fill('');this.progress=new Float32Array(n);this.facing=new Uint8Array(n);this.moving=new Uint8Array(n);this.tool=new Uint8Array(n);this.armor=new Uint8Array(n);this.wound=new Float32Array(n);this.infection=new Float32Array(n);this.count=0;this.nextUid=1;this.archive=[]}
- gene(i,g){return this.genes[i*GENE.COUNT+g]} setGene(i,g,v){this.genes[i*GENE.COUNT+g]=v}
- need(i,k){return this.needs[i*NEED.COUNT+k]} setNeed(i,k,v){this.needs[i*NEED.COUNT+k]=Math.max(0,Math.min(1,v))}
- skill(i,s){return this.skills[i*SKILLS.length+s]} addSkill(i,s,v){this.skills[i*SKILLS.length+s]=Math.min(1,this.skill(i,s)+v*this.gene(i,GENE.LEARNING))}
- nutritionAt(i,k){return this.nutrition[i*NUTRITION.COUNT+k]} addNutrition(i,k,v){const p=i*NUTRITION.COUNT+k;this.nutrition[p]=Math.max(0,Math.min(1,this.nutrition[p]+v))}
+ constructor(){
+  const n=MAX_NPCS;
+  this.alive=new Uint8Array(n);
+  this.uid=new Uint32Array(n);
+  this.x=new Float32Array(n);
+  this.y=new Float32Array(n);
+  this.prevX=new Float32Array(n);
+  this.prevY=new Float32Array(n);
+  this.age=new Float32Array(n);
+  this.sex=new Uint8Array(n);
+  this.hp=new Float32Array(n);
+  this.stamina=new Float32Array(n);
+  this.prestige=new Float32Array(n);
+  this.prof=new Uint8Array(n);
+  this.needs=new Float32Array(n*NEED.COUNT);
+  this.genes=new Float32Array(n*GENE.COUNT);
+  this.skills=new Float32Array(n*SKILLS.length);
+  this.nutrition=new Float32Array(n*NUTRITION.COUNT);
+
+  this.state=new Uint8Array(n);
+  this.taskKind=new Uint8Array(n);
+  this.taskTargetX=new Float32Array(n);
+  this.taskTargetY=new Float32Array(n);
+  this.taskTargetRef=new Int32Array(n);
+  this.taskTargetRef.fill(-1);
+  this.taskProgress=new Float32Array(n);
+  this.taskDuration=new Float32Array(n);
+  this.taskTimeout=new Int32Array(n);
+  this.pathIndex=new Int32Array(n);
+  this.facing=new Uint8Array(n);
+  this.animFrame=new Uint8Array(n);
+  this.animTimer=new Uint8Array(n);
+  this.moving=new Uint8Array(n);
+
+  // Compatibility aliases while the rest of the v2/v3 UI migrates to task* names.
+  this.progress=this.taskProgress;
+  this.routeIndex=this.pathIndex;
+
+  this.names=Array(n).fill('');
+  this.parents=Array.from({length:n},()=>[0,0]);
+  this.children=Array.from({length:n},()=>[]);
+  this.partner=new Int16Array(n).fill(-1);
+  this.action=Array(n).fill(ACTION.IDLE);
+  this.intent=Array(n).fill(null);
+  this.plan=Array.from({length:n},()=>[]);
+  this.scores=Array.from({length:n},()=>[]);
+  this.routes=new Map();
+  this.inventory=Array.from({length:n},()=>new Float32Array(RESOURCE.COUNT));
+  this.birthTick=new Uint32Array(n);
+  this.deathTick=new Uint32Array(n);
+  this.deathCause=Array(n).fill('');
+  this.tool=new Uint8Array(n);
+  this.armor=new Uint8Array(n);
+  this.wound=new Float32Array(n);
+  this.infection=new Float32Array(n);
+  this.count=0;
+  this.nextUid=1;
+  this.archive=[];
+ }
+
+ gene(i,g){return this.genes[i*GENE.COUNT+g]}
+ setGene(i,g,v){this.genes[i*GENE.COUNT+g]=v}
+ need(i,k){return this.needs[i*NEED.COUNT+k]}
+ setNeed(i,k,v){this.needs[i*NEED.COUNT+k]=Math.max(0,Math.min(1,v))}
+ skill(i,s){return this.skills[i*SKILLS.length+s]}
+ addSkill(i,s,v){this.skills[i*SKILLS.length+s]=Math.min(1,this.skill(i,s)+v*this.gene(i,GENE.LEARNING))}
+ nutritionAt(i,k){return this.nutrition[i*NUTRITION.COUNT+k]}
+ addNutrition(i,k,v){const p=i*NUTRITION.COUNT+k;this.nutrition[p]=Math.max(0,Math.min(1,this.nutrition[p]+v))}
  genome(i){return this.genes.slice(i*GENE.COUNT,(i+1)*GENE.COUNT)}
- create(rng,x,y,opts={}){let i;if(this.count<MAX_NPCS)i=this.count++;else{i=this.oldestDeadSlot();if(i<0)return-1;this.archiveSlot(i);this.resetSlot(i)}this.alive[i]=1;this.uid[i]=this.nextUid++;this.x[i]=this.prevX[i]=x;this.y[i]=this.prevY[i]=y;this.age[i]=opts.age??rng.range(18,38);this.sex[i]=opts.sex??rng.int(0,1);this.hp[i]=1;this.stamina[i]=1;this.prestige[i]=opts.prestige||0;this.prof[i]=0;this.names[i]=opts.name||`${rng.pick(FIRST)} ${rng.pick(LAST)}`;this.genes.set(opts.genome||randomGenome(rng),i*GENE.COUNT);for(let k=0;k<NEED.COUNT;k++)this.setNeed(i,k,rng.range(.08,.3));for(let k=0;k<NUTRITION.COUNT;k++)this.nutrition[i*NUTRITION.COUNT+k]=.75;this.parents[i]=opts.parents||[0,0];this.birthTick[i]=opts.birthTick||0;this.action[i]='observar';this.tool[i]=opts.tool??TOOL.NONE;this.armor[i]=opts.armor??ARMOR.NONE;return i}
- child(rng,a,b,tick){const i=this.create(rng,(this.x[a]+this.x[b])/2,(this.y[a]+this.y[b])/2,{age:0,genome:inheritGenome(this.genome(a),this.genome(b),rng),parents:[this.uid[a],this.uid[b]],birthTick:tick});if(i<0)return-1;this.children[a].push(this.uid[i]);this.children[b].push(this.uid[i]);return i}
- derived(i){const nutrition=(this.nutritionAt(i,0)+this.nutritionAt(i,1)+this.nutritionAt(i,2))/3;return derived(this.genome(i),this.age[i],.65+.35*nutrition)}
+
+ create(rng,x,y,opts={}){
+  let i;
+  if(this.count<MAX_NPCS)i=this.count++;
+  else{
+   i=this.oldestDeadSlot();
+   if(i<0)return-1;
+   this.archiveSlot(i);
+   this.resetSlot(i);
+  }
+  this.alive[i]=1;
+  this.uid[i]=this.nextUid++;
+  this.x[i]=this.prevX[i]=x;
+  this.y[i]=this.prevY[i]=y;
+  this.age[i]=opts.age??rng.range(18,38);
+  this.sex[i]=opts.sex??rng.int(0,1);
+  this.hp[i]=1;
+  this.stamina[i]=1;
+  this.prestige[i]=opts.prestige||0;
+  this.prof[i]=0;
+  this.names[i]=opts.name||`${rng.pick(FIRST)} ${rng.pick(LAST)}`;
+  this.genes.set(opts.genome||randomGenome(rng),i*GENE.COUNT);
+  for(let k=0;k<NEED.COUNT;k++)this.setNeed(i,k,rng.range(.08,.3));
+  for(let k=0;k<NUTRITION.COUNT;k++)this.nutrition[i*NUTRITION.COUNT+k]=.75;
+  this.parents[i]=opts.parents||[0,0];
+  this.birthTick[i]=opts.birthTick||0;
+  this.action[i]=ACTION.IDLE;
+  this.state[i]=NPC_STATE.IDLE;
+  this.taskKind[i]=ACTION_ID[ACTION.IDLE];
+  this.taskTargetX[i]=x;
+  this.taskTargetY[i]=y;
+  this.taskTargetRef[i]=-1;
+  this.tool[i]=opts.tool??TOOL.NONE;
+  this.armor[i]=opts.armor??ARMOR.NONE;
+  return i;
+ }
+
+ child(rng,a,b,tick){
+  const i=this.create(rng,(this.x[a]+this.x[b])/2,(this.y[a]+this.y[b])/2,{
+   age:0,genome:inheritGenome(this.genome(a),this.genome(b),rng),parents:[this.uid[a],this.uid[b]],birthTick:tick
+  });
+  if(i<0)return-1;
+  this.children[a].push(this.uid[i]);
+  this.children[b].push(this.uid[i]);
+  return i;
+ }
+
+ derived(i){
+  const nutrition=(this.nutritionAt(i,0)+this.nutritionAt(i,1)+this.nutritionAt(i,2))/3;
+  return derived(this.genome(i),this.age[i],.65+.35*nutrition);
+ }
+
  professionName(i){return PROF[this.prof[i]]||PROF[0]}
  living(){const out=[];for(let i=0;i<this.count;i++)if(this.alive[i])out.push(i);return out}
- kill(i,cause,tick=0){this.alive[i]=0;this.hp[i]=0;this.deathCause[i]=cause;this.deathTick[i]=tick;this.action[i]='morto';this.intent[i]=null;this.route[i]=[];this.progress[i]=0}
- beginFrame(){for(let i=0;i<this.count;i++)if(this.alive[i]){this.prevX[i]=this.x[i];this.prevY[i]=this.y[i];this.moving[i]=0}}
- oldestDeadSlot(){let best=-1,t=Infinity;for(let i=0;i<this.count;i++)if(!this.alive[i]&&this.deathTick[i]<t){t=this.deathTick[i];best=i}return best}
- archiveSlot(i){if(!this.uid[i])return;this.archive.push({uid:this.uid[i],name:this.names[i],parents:this.parents[i],children:this.children[i],deathCause:this.deathCause[i],profession:this.professionName(i),age:this.age[i],prestige:this.prestige[i]});if(this.archive.length>600)this.archive.shift()}
- resetSlot(i){this.alive[i]=0;this.needs.fill(0,i*NEED.COUNT,(i+1)*NEED.COUNT);this.genes.fill(0,i*GENE.COUNT,(i+1)*GENE.COUNT);this.skills.fill(0,i*SKILLS.length,(i+1)*SKILLS.length);this.nutrition.fill(0,i*NUTRITION.COUNT,(i+1)*NUTRITION.COUNT);this.names[i]='';this.parents[i]=[0,0];this.children[i]=[];this.partner[i]=-1;this.action[i]='observar';this.intent[i]=null;this.plan[i]=[];this.scores[i]=[];this.route[i]=[];this.routeIndex[i]=0;this.inventory[i]=new Float32Array(RESOURCE.COUNT);this.deathCause[i]='';this.deathTick[i]=0;this.progress[i]=0;this.wound[i]=0;this.infection[i]=0;this.tool[i]=0;this.armor[i]=0}
+
+ getRoute(i){return this.routes.get(i)||null}
+ setRoute(i,route){
+  if(route?.length)this.routes.set(i,route);
+  else this.routes.delete(i);
+  this.pathIndex[i]=0;
+ }
+ clearRoute(i){
+  this.routes.delete(i);
+  this.pathIndex[i]=0;
+ }
+
+ advanceWalkAnimation(i,distance){
+  let timer=this.animTimer[i]+Math.max(1,Math.round(Math.max(0,distance)*64));
+  while(timer>=8){
+   timer-=8;
+   this.animFrame[i]=(this.animFrame[i]+1)&3;
+  }
+  this.animTimer[i]=timer;
+ }
+
+ advanceWorkAnimation(i,dt=1){
+  let timer=this.animTimer[i]+Math.max(1,Math.round(dt));
+  while(timer>=8){
+   timer-=8;
+   this.animFrame[i]=(this.animFrame[i]+1)&1;
+  }
+  this.animTimer[i]=timer;
+ }
+
+ kill(i,cause,tick=0){
+  this.alive[i]=0;
+  this.hp[i]=0;
+  this.deathCause[i]=cause;
+  this.deathTick[i]=tick;
+  this.action[i]='morto';
+  this.intent[i]=null;
+  this.state[i]=NPC_STATE.IDLE;
+  this.taskKind[i]=ACTION_ID[ACTION.IDLE];
+  this.taskProgress[i]=0;
+  this.taskDuration[i]=0;
+  this.taskTimeout[i]=0;
+  this.taskTargetRef[i]=-1;
+  this.clearRoute(i);
+ }
+
+ beginFrame(){
+  for(let i=0;i<this.count;i++)if(this.alive[i]){
+   this.prevX[i]=this.x[i];
+   this.prevY[i]=this.y[i];
+   this.moving[i]=0;
+  }
+ }
+
+ oldestDeadSlot(){
+  let best=-1,t=Infinity;
+  for(let i=0;i<this.count;i++)if(!this.alive[i]&&this.deathTick[i]<t){t=this.deathTick[i];best=i}
+  return best;
+ }
+
+ archiveSlot(i){
+  if(!this.uid[i])return;
+  this.archive.push({
+   uid:this.uid[i],name:this.names[i],parents:this.parents[i],children:this.children[i],
+   deathCause:this.deathCause[i],profession:this.professionName(i),age:this.age[i],prestige:this.prestige[i]
+  });
+  if(this.archive.length>600)this.archive.shift();
+ }
+
+ resetSlot(i){
+  this.alive[i]=0;
+  this.needs.fill(0,i*NEED.COUNT,(i+1)*NEED.COUNT);
+  this.genes.fill(0,i*GENE.COUNT,(i+1)*GENE.COUNT);
+  this.skills.fill(0,i*SKILLS.length,(i+1)*SKILLS.length);
+  this.nutrition.fill(0,i*NUTRITION.COUNT,(i+1)*NUTRITION.COUNT);
+  this.names[i]='';
+  this.parents[i]=[0,0];
+  this.children[i]=[];
+  this.partner[i]=-1;
+  this.action[i]=ACTION.IDLE;
+  this.intent[i]=null;
+  this.plan[i]=[];
+  this.scores[i]=[];
+  this.inventory[i]=new Float32Array(RESOURCE.COUNT);
+  this.deathCause[i]='';
+  this.deathTick[i]=0;
+  this.state[i]=NPC_STATE.IDLE;
+  this.taskKind[i]=ACTION_ID[ACTION.IDLE];
+  this.taskTargetX[i]=0;
+  this.taskTargetY[i]=0;
+  this.taskTargetRef[i]=-1;
+  this.taskProgress[i]=0;
+  this.taskDuration[i]=0;
+  this.taskTimeout[i]=0;
+  this.pathIndex[i]=0;
+  this.facing[i]=0;
+  this.animFrame[i]=0;
+  this.animTimer[i]=0;
+  this.moving[i]=0;
+  this.wound[i]=0;
+  this.infection[i]=0;
+  this.tool[i]=0;
+  this.armor[i]=0;
+  this.clearRoute(i);
+ }
+
  indexByUid(uid){if(!uid)return-1;for(let i=0;i<this.count;i++)if(this.uid[i]===uid)return i;return-1}
- personByUid(uid){const i=this.indexByUid(uid);if(i>=0)return{uid,name:this.names[i],alive:!!this.alive[i],deathCause:this.deathCause[i],profession:this.professionName(i),parents:this.parents[i],children:this.children[i]};return this.archive.find(x=>x.uid===uid)||null}
- serialize(){const out={count:this.count,nextUid:this.nextUid,archive:this.archive,names:this.names,parents:this.parents,children:this.children,action:this.action,intent:this.intent,deathCause:this.deathCause,inventory:this.inventory.map(a=>Array.from(a))};for(const k of typedKeys)out[k]=Array.from(this[k]);return out}
- static hydrate(d){const s=new NPCStore();s.count=Math.min(d.count||0,MAX_NPCS);s.nextUid=d.nextUid||s.count+1;s.archive=d.archive||[];for(const k of typedKeys){if(d[k])s[k].set(d[k].slice(0,s[k].length))}for(const k of ['names','parents','children','action','intent','deathCause'])if(d[k])s[k]=d[k];if(d.inventory)s.inventory=d.inventory.slice(0,MAX_NPCS).map(a=>{const z=new Float32Array(RESOURCE.COUNT);z.set(a.slice(0,RESOURCE.COUNT));return z});for(let i=0;i<s.count;i++){if(!d.uid)s.uid[i]=i+1;if(!d.prevX){s.prevX[i]=s.x[i];s.prevY[i]=s.y[i]}if(!d.nutrition)for(let k=0;k<NUTRITION.COUNT;k++)s.nutrition[i*NUTRITION.COUNT+k]=.75}return s}
+ personByUid(uid){
+  const i=this.indexByUid(uid);
+  if(i>=0)return{uid,name:this.names[i],alive:!!this.alive[i],deathCause:this.deathCause[i],profession:this.professionName(i),parents:this.parents[i],children:this.children[i]};
+  return this.archive.find(x=>x.uid===uid)||null;
+ }
+
+ serialize(){
+  const out={
+   count:this.count,nextUid:this.nextUid,archive:this.archive,names:this.names,parents:this.parents,children:this.children,
+   action:this.action,intent:this.intent,deathCause:this.deathCause,inventory:this.inventory.map(a=>Array.from(a))
+  };
+  for(const k of serialTypedKeys)out[k]=Array.from(this[k]);
+  return out;
+ }
+
+ static hydrate(d){
+  const s=new NPCStore();
+  s.count=Math.min(d.count||0,MAX_NPCS);
+  s.nextUid=d.nextUid||s.count+1;
+  s.archive=d.archive||[];
+  for(const k of serialTypedKeys)if(d[k])s[k].set(d[k].slice(0,s[k].length));
+
+  if(!d.taskProgress&&d.progress)s.taskProgress.set(d.progress.slice(0,s.taskProgress.length));
+
+  const assignArray=(key,fallback)=>{
+   const src=d[key]||[];
+   for(let i=0;i<MAX_NPCS;i++)s[key][i]=src[i]??fallback(i);
+  };
+  assignArray('names',()=> '');
+  assignArray('parents',()=>[0,0]);
+  assignArray('children',()=>[]);
+  assignArray('action',()=>ACTION.IDLE);
+  assignArray('intent',()=>null);
+  assignArray('deathCause',()=>'');
+
+  if(d.inventory){
+   for(let i=0;i<Math.min(MAX_NPCS,d.inventory.length);i++){
+    const z=new Float32Array(RESOURCE.COUNT);
+    z.set((d.inventory[i]||[]).slice(0,RESOURCE.COUNT));
+    s.inventory[i]=z;
+   }
+  }
+
+  for(let i=0;i<s.count;i++){
+   if(!d.uid)s.uid[i]=i+1;
+   if(!d.nutrition)for(let k=0;k<NUTRITION.COUNT;k++)s.nutrition[i*NUTRITION.COUNT+k]=.75;
+
+   // Ephemeral render/path state is always reconstructed.
+   s.prevX[i]=s.x[i];
+   s.prevY[i]=s.y[i];
+   s.pathIndex[i]=0;
+   s.animFrame[i]=0;
+   s.animTimer[i]=0;
+   s.moving[i]=0;
+
+   const int=s.intent[i];
+   if(!d.taskKind)s.taskKind[i]=ACTION_ID[int?.action??s.action[i]]??ACTION_ID[ACTION.IDLE];
+   if(!d.taskTargetX)s.taskTargetX[i]=int?.targetX??s.x[i];
+   if(!d.taskTargetY)s.taskTargetY[i]=int?.targetY??s.y[i];
+   if(!d.taskTargetRef)s.taskTargetRef[i]=int?.targetId??-1;
+   if(!d.state){
+    if(!int)s.state[i]=NPC_STATE.IDLE;
+    else if(Math.hypot(s.taskTargetX[i]-s.x[i],s.taskTargetY[i]-s.y[i])>.8)s.state[i]=NPC_STATE.MOVING;
+    else if(int.action===ACTION.SLEEP)s.state[i]=NPC_STATE.SLEEPING;
+    else if([ACTION.SOCIAL,ACTION.CARE,ACTION.FIGHT].includes(int.action))s.state[i]=NPC_STATE.INTERACTING;
+    else s.state[i]=NPC_STATE.WORKING;
+   }
+  }
+  return s;
+ }
 }

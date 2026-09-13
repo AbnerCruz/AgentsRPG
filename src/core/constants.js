@@ -1,4 +1,4 @@
-export const VERSION=3;
+export const VERSION=4;
 export const MAP_W=80, MAP_H=80, TILE=16, MAX_NPCS=160, MAX_ANIMALS=220;
 export const DAY_TICKS=840;
 
@@ -24,7 +24,12 @@ export const ACTION={
  FORAGE:'coletar frutos',WATER:'buscar água',WOOD:'cortar madeira',STONE:'coletar pedra',IRON:'minerar ferro',FARM:'cultivar',FISH:'pescar',HUNT:'caçar',
  COOK:'cozinhar',TAILOR:'costurar',FORGE:'forjar',CARE:'tratar ferido',SOCIAL:'conversar',BUILD:'construir',EXPLORE:'explorar',DUNGEON:'explorar dungeon',FIGHT:'lutar'
 };
+export const ACTION_LIST=Object.freeze(Object.values(ACTION));
+export const ACTION_ID=Object.freeze(Object.fromEntries(ACTION_LIST.map((name,index)=>[name,index])));
+export const ACTION_BY_ID=ACTION_LIST;
 export const TRAVEL_ACTIONS=new Set([ACTION.RETURN,ACTION.FORAGE,ACTION.WATER,ACTION.WOOD,ACTION.STONE,ACTION.IRON,ACTION.FARM,ACTION.FISH,ACTION.HUNT,ACTION.CARE,ACTION.SOCIAL,ACTION.BUILD,ACTION.DUNGEON,ACTION.FIGHT,ACTION.FLEE]);
+
+export const NPC_STATE={IDLE:0,MOVING:1,WORKING:2,INTERACTING:3,SLEEPING:4,NAMES:['ocioso','movendo-se','trabalhando','interagindo','dormindo']};
 
 export const ANIMAL={DEER:0,RABBIT:1,BOAR:2,WOLF:3,BEAR:4,CHICKEN:5,GOAT:6,NAMES:['cervo','coelho','javali','lobo','urso','galinha','cabra']};
 export const ANIMAL_INFO={
