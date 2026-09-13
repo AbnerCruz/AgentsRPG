@@ -1,4 +1,4 @@
-const CACHE='agentsrpg-v3-20260913';
+const CACHE='agentsrpg-v3-scale-20260913a';
 const CORE=['./','./index.html','./style.css','./manifest.webmanifest','./src/main.js','./src/simulation.js','./src/core/constants.js','./src/core/rng.js','./src/core/clock.js','./src/core/loop.js','./src/core/save.js','./src/genetics/genome.js','./src/entities/npcs.js','./src/ai/memory.js','./src/ai/perception.js','./src/ai/drives.js','./src/ai/utility.js','./src/ai/planner.js','./src/world/pathfinding.js','./src/world/world.js','./src/systems/actions.js','./src/systems/executor.js','./src/systems/animals.js','./src/systems/social.js','./src/systems/lifecycle.js','./src/systems/professions.js','./src/dungeon/dungeon.js','./src/narrative/templates.js','./src/render/renderer.js','./src/ui/ui.js'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(xs=>Promise.all(xs.filter(x=>x!==CACHE).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));
