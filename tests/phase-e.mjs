@@ -4,7 +4,7 @@ import {AnimalSystem} from '../src/systems/animals.js';
 import {perceive} from '../src/ai/perception.js';
 import {scoreActions} from '../src/ai/utility.js';
 import {DISEASES} from '../src/systems/disease.js';
-import {ACTION,ANIMAL,ANIMAL_INFO,ANIMAL_STATE,BUILDING,DAY_TICKS,MAX_ANIMALS,RESOURCE} from '../src/core/constants.js';
+import {ACTION,ANIMAL,ANIMAL_STATE,BUILDING,DAY_TICKS,MAX_ANIMALS,RESOURCE} from '../src/core/constants.js';
 import {RNG} from '../src/core/rng.js';
 
 const sim=new Simulation(2026),animals=sim.animals,n=sim.npcs;
@@ -23,13 +23,15 @@ assert.ok(after300>initial*.38,`ecossistema colapsou sem humanos: ${initial} -> 
 assert.ok(after300<=MAX_ANIMALS,'ecossistema ultrapassou a capacidade global');
 assert.ok(Object.values(animals.populationBySpecies()).filter(v=>v>0).length>=8,'diversidade ecológica colapsou');
 
-// Recuperação: reduzir coelhos de uma região e verificar recolonização/reprodução.
-let targetRegion=null;for(let ry=0;ry<12&&!targetRegion;ry++)for(let rx=0;rx<12&&!targetRegion;rx++){const ids=animals.livingIndices().filter(i=>animals.species[i]===ANIMAL.RABBIT&&Math.floor(animals.x[i]/16)===rx&&Math.floor(animals.y[i]/16)===ry);if(ids.length>=3)targetRegion={rx,ry,ids}}
-if(targetRegion){const before=targetRegion.ids.length;for(const i of targetRegion.ids.slice(0,Math.max(1,Math.floor(before*.7))))animals.killIndex(i,'sobrecaça');animals.recountRegional();const low=animals.regionPop[animals.regionSpeciesIndex(targetRegion.rx,targetRegion.ry,ANIMAL.RABBIT)];for(let d=0;d<160;d++){sim.tick+=DAY_TICKS;animals.regionalTick(sim)}const recovered=animals.regionPop[animals.regionSpeciesIndex(targetRegion.rx,targetRegion.ry,ANIMAL.RABBIT)];assert.ok(recovered>low,`fauna local não se recuperou após sobrecaça: ${low} -> ${recovered}`)}
+// Sobrecaça: em habitat realmente viável, uma população reduzida precisa recolonizar.
+let target={rx:0,ry:0,k:-1};for(let ry=0;ry<12;ry++)for(let rx=0;rx<12;rx++){const k=animals.capacityFor(ANIMAL.RABBIT,rx,ry,sim.world,'primavera');if(k>target.k)target={rx,ry,k}}
+assert.ok(target.k>=4,'mundo precisa conter ao menos um refúgio viável para coelhos');
+let local=animals.livingIndices().filter(i=>animals.species[i]===ANIMAL.RABBIT&&Math.floor(animals.x[i]/16)===target.rx&&Math.floor(animals.y[i]/16)===target.ry);while(local.length<6){const born=animals.spawnInRegion(ANIMAL.RABBIT,target.rx,target.ry,false);if(!born)break;local=animals.livingIndices().filter(i=>animals.species[i]===ANIMAL.RABBIT&&Math.floor(animals.x[i]/16)===target.rx&&Math.floor(animals.y[i]/16)===target.ry)}
+for(const i of local.slice(1))animals.killIndex(i,'sobrecaça');animals.recountRegional();const low=animals.regionPop[animals.regionSpeciesIndex(target.rx,target.ry,ANIMAL.RABBIT)];assert.equal(low,1,'teste de sobrecaça precisa reduzir o refúgio a um sobrevivente');for(let d=0;d<200;d++){sim.tick+=DAY_TICKS;animals.regionalTick(sim)}const recovered=animals.regionPop[animals.regionSpeciesIndex(target.rx,target.ry,ANIMAL.RABBIT)];assert.ok(recovered>low,`fauna local não se recuperou após sobrecaça em habitat viável: ${low} -> ${recovered}`);
 
 // Novo mundo para comportamento humano e caça/pesca sem técnica avançada.
 const s2=new Simulation(7919),j=s2.npcs.living()[0];
-const rabbit=s2.animals.spawn(ANIMAL.RABBIT,s2.npcs.x[j]+.8,s2.npcs.y[j],false,{age:1,tameness:.05});
+s2.animals.spawn(ANIMAL.RABBIT,s2.npcs.x[j]+.8,s2.npcs.y[j],false,{age:1,tameness:.05});
 let p=perceive(s2,j),scores=scoreActions(s2,j,p);assert.ok(scores.some(([a])=>a===ACTION.HUNT),'caça de pequeno porte precisa existir antes da técnica avançada');
 const fish=s2.world.resources.find(r=>r.kind===RESOURCE.FISH);assert.ok(fish,'mundo precisa de peixe em rio/lago');s2.npcs.x[j]=fish.x+.4;s2.npcs.y[j]=fish.y+.4;p=perceive(s2,j);scores=scoreActions(s2,j,p);assert.ok(scores.some(([a])=>a===ACTION.FISH),'pesca manual precisa existir antes da técnica avançada');
 
@@ -47,4 +49,4 @@ assert.equal(DISEASES[4]?.key,'zoonosis','zoonose precisa integrar o sistema de 
 // Persistência: formato compacto deve restaurar população e mansidão sem trocar a arquitetura.
 const saved=s2.animals.serialize(),restored=AnimalSystem.hydrate(JSON.parse(JSON.stringify(saved)),new RNG(99),s2.world);assert.equal(restored.liveCount(),s2.animals.liveCount(),'round-trip da fauna perdeu indivíduos');assert.ok(restored.species instanceof Uint8Array,'hydrate precisa preservar TypedArrays');assert.equal(restored.byId(goat.id)?.domestic,true,'domesticação deve sobreviver ao save/load');
 
-console.log(`OK Phase E: fauna ${initial} -> ${after300}; TypedArrays, ecologia, caça/pesca, domesticação, fogo e zoonose ativos`);
+console.log(`OK Phase E: fauna ${initial} -> ${after300}; refúgio ${low} -> ${recovered}; TypedArrays, ecologia, caça/pesca, domesticação, fogo e zoonose ativos`);
