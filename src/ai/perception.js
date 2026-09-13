@@ -1,3 +1,4 @@
+import '../systems/ecology-recovery.js';
 import {MAP_W,MAP_H,RESOURCE,TILE_TYPE,BUILDING,BIOME,NPC_STATE,ANIMAL_INFO} from '../core/constants.js';
 import {SPATIAL_FLAG} from './memory.js';
 import {isNight} from '../core/clock.js';
