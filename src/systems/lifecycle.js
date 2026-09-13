@@ -6,7 +6,7 @@ export function lifecycleTick(sim){
  const n=sim.npcs,tech=technologyFor(sim),senses=sensoryFor(sim);
  for(const i of n.living()){
   n.age[i]+=1/(DAY_TICKS*12);
-  const dv=n.derived(i),painTarget=Math.min(1,n.wound[i]*(1.05-dv.painTolerance*.45)+(n.activeDisease[i]?.18:0));n.pain[i]+=(painTarget-n.pain[i])*.018;
+  const dv=n.derived(i),painTarget=Math.min(1,n.wound[i]*(1.05-dv.painTolerance*.45)+(n.activeDisease[i] ? .18 : 0));n.pain[i]+=(painTarget-n.pain[i])*.018;
   if(n.wound[i]>0){const rest=n.action[i]===ACTION.SLEEP?.0007:.00012;n.wound[i]=Math.max(0,n.wound[i]-rest*(1+n.skill(i,12)*.35));if(n.wound[i]>.35&&sim.rng.chance(.00018*(1-n.gene(i,7))))n.infection[i]=Math.min(1,n.infection[i]+.05);else n.infection[i]=Math.max(0,n.infection[i]-.00008)}
   if(n.age[i]>=12&&sim.tick%45===i%45)tech.experiment(sim,i);
   if(n.age[i]<16&&sim.tick%120===i%120)for(const uid of n.parents[i]||[]){const p=n.indexByUid(uid);if(p>=0&&n.alive[p])tech.inherit(sim,p,i)}
