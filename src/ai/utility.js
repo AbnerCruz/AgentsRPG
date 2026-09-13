@@ -11,6 +11,7 @@ function teachable(tech,n,a,b){let c=0;for(let t=0;t<TECH_COUNT;t++)if(tech.know
 function localGroup(perception,i){const ids=[i];for(const h of perception.humans||[])if(h.d<=9&&!ids.includes(h.id))ids.push(h.id);return ids}
 function localQty(n,ids,kind){let s=0;for(const i of ids)s+=n.inventory[i]?.[kind]||0;return s}
 function specialization(n,i,ids,profession){if(!profession)return 1;if(n.prof[i]===profession)return 1.12;let peers=0,adults=0;for(const j of ids){if(j===i||n.age[j]<16)continue;adults++;if(n.prof[j]===profession)peers++}if(!peers)return 1.05;return 1/(1+peers/Math.max(2,adults*.7))}
+function agendaBias(sim,action){const phase=sim.meta().phase;if(phase==='manhã'){if([ACTION.FORAGE,ACTION.WATER,ACTION.WOOD,ACTION.STONE,ACTION.IRON,ACTION.FARM,ACTION.BUILD,ACTION.EXPLORE].includes(action))return 1.12;if([ACTION.SLEEP,ACTION.SOCIAL].includes(action))return.86}if(phase==='tarde'){if([ACTION.BUILD,ACTION.FARM,ACTION.WOOD,ACTION.STONE,ACTION.COOK,ACTION.TAILOR,ACTION.FORGE].includes(action))return 1.08}if(phase==='entardecer'){if([ACTION.RETURN,ACTION.COOK,ACTION.SOCIAL,ACTION.WARM].includes(action))return 1.18;if([ACTION.IRON,ACTION.EXPLORE,ACTION.DUNGEON].includes(action))return.74}if(phase==='noite'||phase==='madrugada'){if([ACTION.SLEEP,ACTION.RETURN,ACTION.WARM,ACTION.SOCIAL].includes(action))return 1.18}return 1}
 export function blockedMaterialPressure(sim,i,tech=technologyFor(sim)){const n=sim.npcs,m=sim.memory,unknown=new Set();for(const t of TECH){if(tech.knows(n,i,t.id)||!tech.prerequisites(n,i,t.id))continue;for(const k of t.mat){if(!locatable.has(k)||(n.inventory[i][k]||0)>.04)continue;if(!m.recallNearest(i,n.x[i],n.y[i],k,sim.tick,840*45))unknown.add(k)}}let pressure=Math.min(.85,unknown.size*.18);if(!tech.knows(n,i,0)&&unknown.has(RESOURCE.STONE))pressure+=.45;return Math.min(1.15,pressure)}
 export function scoreActions(sim,i,perception={}){
  const n=sim.npcs,m=sim.memory,g=x=>n.gene(i,x),need=x=>perceivedNeed(sim,i,x),known=k=>knownResource(sim,i,k),inv=n.inventory[i],tech=technologyFor(sim);
@@ -45,6 +46,7 @@ export function scoreActions(sim,i,perception={}){
   [ACTION.DUNGEON,dungeons.length&&ownWater>.2&&ownFood>.2&&need(NEED.HUNGER)<.48&&need(NEED.THIRST)<.48&&n.stamina[i]>.42?(.1+g(GENE.AMBITION)*.5+n.prestige[i]*.001)*(1-g(GENE.CAUTION)*.58)*(.38+n.skill(i,10))*m.dangerModifier(i,'dungeon'):0]
  ];
  if(night)for(const row of scores)if([ACTION.WOOD,ACTION.STONE,ACTION.IRON,ACTION.FARM,ACTION.FISH,ACTION.HUNT,ACTION.BUILD,ACTION.FORGE,ACTION.TAILOR].includes(row[0]))row[1]*=.48;
+ for(const row of scores)row[1]*=agendaBias(sim,row[0]);
  const available=scores.filter(row=>row[0]===ACTION.HUNT||row[0]===ACTION.FISH||tech.canAction(i,row[0],sim));available.sort((a,b)=>b[1]-a[1]);return available;
 }
 export function chooseAction(sim,i,scores){const top=scores.filter(x=>x[1]>0).slice(0,3);if(!top.length)return ACTION.IDLE;const picked=sim.rng.weighted(top,x=>Math.pow(Math.max(.0001,x[1]),2));return picked?.[0]||ACTION.IDLE}
