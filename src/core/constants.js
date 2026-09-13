@@ -1,9 +1,10 @@
-export const VERSION=5;
+export const VERSION=6;
 export const MAP_W=192, MAP_H=192, TILE=16, MAX_NPCS=512, MAX_ANIMALS=900;
 export const DAY_TICKS=840;
+export const TECH_COUNT=36;
 
 export const NEED={HUNGER:0,THIRST:1,SLEEP:2,TEMP:3,SAFETY:4,SOCIAL:5,PURPOSE:6,COUNT:7};
-export const GENE={STRENGTH:0,ENDURANCE:1,SPEED:2,DEXTERITY:3,FERTILITY:4,LONGEVITY:5,METABOLISM:6,DISEASE:7,COLD:8,LEARNING:9,MEMORY:10,PERCEPTION:11,CREATIVITY:12,AGGRESSION:13,SOCIABILITY:14,AMBITION:15,CAUTION:16,LOYALTY:17,GREED:18,CURIOSITY:19,STUBBORN:20,EMPATHY:21,SKIN:22,HAIR:23,HEIGHT:24,BUILD:25,RARE_A:26,RARE_B:27,COUNT:28};
+export const GENE={STRENGTH:0,ENDURANCE:1,SPEED:2,DEXTERITY:3,FERTILITY:4,LONGEVITY:5,METABOLISM:6,DISEASE:7,COLD:8,LEARNING:9,MEMORY:10,PERCEPTION:11,CREATIVITY:12,AGGRESSION:13,SOCIABILITY:14,AMBITION:15,CAUTION:16,LOYALTY:17,GREED:18,CURIOSITY:19,STUBBORN:20,EMPATHY:21,SKIN:22,HAIR:23,HEIGHT:24,BUILD:25,HEARING:26,SMELL:27,RARE_A:26,RARE_B:27,COUNT:28};
 export const SKILLS=['mineração','lenha','agricultura','caça','pesca','culinária','construção','ferraria','marcenaria','alfaiataria','combate','arco','cura','negociação'];
 
 export const RESOURCE={LOG:0,STONE:1,IRON:2,GRAIN:3,WATER:4,LEATHER:5,BERRY:6,MEAT:7,FISH:8,PRESERVED:9,WOOL:10,CLAY:11,SEED:12,EGG:13,MILK:14,SALT:15,COUNT:16,NAMES:['toras','pedra','ferro','grãos','água','couro','frutas','carne','peixe','conserva','lã','argila','sementes','ovos','leite','sal']};
@@ -21,9 +22,9 @@ export const ARMOR={NONE:0,CLOTH:1,LEATHER:2,IRON:3,NAMES:['sem armadura','tecid
 export const PROF=['sem profissão','fazendeiro','lenhador','minerador','ferreiro','guerreiro','caçador','pescador','cozinheiro','construtor','alfaiate','curandeiro'];
 
 export const ACTION={
- IDLE:'observar',RETURN:'voltar para vila',EAT:'comer',DRINK:'beber',SLEEP:'dormir',WARM:'aquecer-se',FLEE:'fugir',
+ IDLE:'observar',RETURN:'voltar para abrigo',EAT:'comer',DRINK:'beber',SLEEP:'dormir',WARM:'aquecer-se',FLEE:'fugir',
  FORAGE:'coletar frutos',WATER:'buscar água',WOOD:'cortar madeira',STONE:'coletar pedra',IRON:'minerar ferro',FARM:'cultivar',FISH:'pescar',HUNT:'caçar',
- COOK:'cozinhar',TAILOR:'costurar',FORGE:'forjar',CARE:'tratar ferido',SOCIAL:'conversar',BUILD:'construir',EXPLORE:'explorar',DUNGEON:'explorar dungeon',FIGHT:'lutar'
+ COOK:'cozinhar',TAILOR:'costurar',FORGE:'forjar',CARE:'tratar ferido',SOCIAL:'conversar',BUILD:'construir',EXPLORE:'explorar',DUNGEON:'explorar dungeon',FIGHT:'lutar',TEACH:'ensinar'
 };
 export const ACTION_LIST=Object.freeze(Object.values(ACTION));
 export const ACTION_ID=Object.freeze(Object.fromEntries(ACTION_LIST.map((name,index)=>[name,index])));
