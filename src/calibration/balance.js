@@ -1,7 +1,7 @@
 export const DEFAULT_BALANCE=Object.freeze({
  hungerRate:0.00084,
  thirstRate:0.00068,
- sleepRate:0.00035,
+ sleepRate:0.0008,
  starvationDamage:0.00065,
  temperatureDamage:0.00055,
  forageYieldMult:0.50,
