@@ -1,1 +1,79 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#101612"><meta name="color-scheme" content="dark"><title>AgentsRPG v10 — Crônicas do Aquário</title><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="style.css"></head><body><div id="app"><canvas id="world" aria-label="Mundo simulado"></canvas><header class="topbar glass"><button id="menuBtn" class="iconBtn">☰</button><div class="brand"><b>AgentsRPG <em>v10</em></b><span id="worldMeta">dia 1 · manhã</span></div><div class="spacer"></div><select id="layerSelect" aria-label="Camada do mundo" style="max-width:116px;background:#172019;color:#e9e4d0;border:1px solid #526052;border-radius:6px;padding:5px;font:10px monospace"><option value="biome">bioma</option><option value="elevation">elevação</option><option value="flow">fluxo</option><option value="moisture">umidade</option><option value="temperature">temperatura</option><option value="slope">declive</option><option value="wear">desgaste</option></select><button id="chronicleBtn" class="iconBtn">☷</button><button id="statsBtn" class="iconBtn">◫</button></header><div class="timebar glass"><button data-speed="0">Ⅱ</button><button data-speed="1" class="active">1×</button><button data-speed="4">4×</button><button data-speed="16">16×</button><button data-speed="64">≫</button></div><div id="criticalStrip" class="criticalStrip"></div><aside id="sidePanel" class="panel hidden"><div class="panelHead"><div><b id="panelTitle">NPC</b><small id="panelSubtitle"></small></div><button id="panelClose">×</button></div><div id="panelBody" class="panelBody"></div></aside><section id="drawer" class="drawer hidden glass"><div class="drawerHead"><b id="drawerTitle">Crônica</b><button id="drawerClose">×</button></div><div id="drawerBody" class="drawerBody"></div></section><div id="toast" class="toast hidden"></div><div id="boot" class="boot"><div class="bootCard"><div class="crest">◆</div><h1>Crônicas do Aquário</h1><p>Cem pessoas despertam dispersas num mundo que não conhecem. Casas agora nascem peça por peça, fecham cômodos, exigem manutenção e marcam território.</p><label>Seed do mundo<input id="seedInput" inputmode="numeric" autocomplete="off"></label><div class="bootActions"><button id="continueBtn" class="secondary hidden">Continuar</button><button id="newBtn">Novo mundo</button></div><small id="bootStatus">Fase G · construção física · cômodos · propriedade · território · save local</small></div></div></div><script type="module" src="src/main.js"></script></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Aquário Medieval</title>
+  <meta name="description" content="Um mundo de fantasia medieval que vive sozinho. Você só assiste.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="view" aria-label="Mapa do mundo"></canvas>
+
+    <header id="bar">
+      <div class="brand">Aquário Medieval</div>
+      <div id="date" class="date"></div>
+      <div id="pop" class="pop"></div>
+      <div class="speed" id="speed" role="group" aria-label="Velocidade">
+        <button data-s="0" title="Pausar (espaço)">❚❚</button>
+        <button data-s="1">1×</button>
+        <button data-s="4">4×</button>
+        <button data-s="16">16×</button>
+        <button data-s="64">64×</button>
+      </div>
+      <button id="panelToggle" class="icon" title="Painel">☰</button>
+    </header>
+
+    <aside id="panel">
+      <nav id="tabs">
+        <button data-tab="chron" class="on">Crônica</button>
+        <button data-tab="tribes">Povos</button>
+        <button data-tab="who">Criatura</button>
+        <button data-tab="world">Mundo</button>
+      </nav>
+      <section id="tab-chron" class="tab on">
+        <div class="row">
+          <label for="impFilter">Mostrar</label>
+          <select id="impFilter">
+            <option value="3">Só grandes eventos</option>
+            <option value="2" selected>Eventos notáveis</option>
+            <option value="1">Quase tudo</option>
+            <option value="0">Tudo</option>
+          </select>
+        </div>
+        <div id="chronList" class="list"></div>
+      </section>
+      <section id="tab-tribes" class="tab"></section>
+      <section id="tab-who" class="tab"><p class="muted">Toque numa criatura no mapa para acompanhar sua vida.</p></section>
+      <section id="tab-world" class="tab">
+        <div class="card">
+          <h3>População</h3>
+          <div id="chartLegend" class="legend"></div>
+          <div class="chartWrap"><canvas id="chart"></canvas><div id="chartTip" class="tip" hidden></div></div>
+          <details><summary>Ver como tabela</summary><div id="chartTable"></div></details>
+        </div>
+        <div class="card">
+          <h3>Novo mundo</h3>
+          <div class="row">
+            <label for="seedInput">Semente</label>
+            <input id="seedInput" type="number" inputmode="numeric">
+            <button id="newWorld">Criar</button>
+            <button id="randWorld">Aleatório</button>
+          </div>
+          <p class="muted small">A mesma semente sempre gera o mesmo mundo e a mesma história.</p>
+        </div>
+        <div class="card">
+          <h3>Como assistir</h3>
+          <p class="muted small">Arraste para mover, role ou use pinça para zoom. Toque numa criatura para ver o que ela pensa, sua família e sua biografia. Toque numa cabana para ver a tribo. Espaço pausa; teclas 1–5 mudam a velocidade.</p>
+        </div>
+      </section>
+    </aside>
+    <div id="toast" aria-live="polite"></div>
+  </div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
